@@ -1,0 +1,70 @@
+services:
+    mysql:
+        image: mysql:latest
+        container_name: DDStore_mysql
+        restart: always
+        environment:
+            MYSQL_ROOT_PASSWORD: 123
+            MYSQL_DATABASE: DDStore
+            MYSQL_USER: hoangdai
+            MYSQL_PASSWORD: hd123  
+        ports:
+            - "25025:3306"
+    # volumes:
+    #     - mysql-data:/var/lib/mysql
+    api_gateway:
+        container_name: api_gateway
+        build:
+            context: ./apps/api_gateway
+            dockerfile: Dockerfile
+        depends_on:
+            - product_service
+            - order_service
+            - user_service
+        environment:
+            APP_NAME: "DDStore"
+            JWT_SECRET: "099a0fa5-d9c6-4d6a-bf04-faf39e16e75b"
+            JWT_EXPIRES_IN: "12h"
+            JWT_RefreshToken_EXPIRES_IN: "30d"
+        restart: always
+        ports:
+            - "9999:10000"    
+    product_service:
+        container_name: product_service
+        build:
+            context: ./apps/product_service
+            dockerfile: Dockerfile
+        environment:
+            APP_NAME: "DDStore"
+            DB_CONN_STR: "root:123@tcp(mysql:3306)/DDStore?charset=utf8mb4&parseTime=True&loc=Local"
+        restart: always
+        ports:
+            - "8888"   
+    order_service:
+        container_name: order_service
+        build:
+            context: ./apps/order_service
+            dockerfile: Dockerfile
+        depends_on:
+            - mysql
+            - product_service
+        environment:
+            APP_NAME: "DDStore"
+            DB_CONN_STR: "root:123@tcp(mysql:3306)/DDStore?charset=utf8mb4&parseTime=True&loc=Local"
+        restart: always
+        ports:
+            - "7777"    
+    user_service:
+        container_name: user_service
+        build:
+            context: ./apps/user_service
+            dockerfile: Dockerfile
+        depends_on:
+            - mysql
+        environment:
+            APP_NAME: "DDStore"
+            DB_CONN_STR: "root:123@tcp(mysql:3306)/DDStore?charset=utf8mb4&parseTime=True&loc=Local"
+        restart: always
+        ports:
+            - "6666"       
+

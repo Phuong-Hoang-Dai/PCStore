@@ -1,0 +1,6 @@
+@import "tailwindcss";
+@import 'swiper/css/bundle';
+
+.swiper-pagination-bullet-active {
+  @apply bg-amber-500 pr-7 rounded-4xl transform duration-500;
+}
