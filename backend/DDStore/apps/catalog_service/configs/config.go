@@ -7,8 +7,10 @@ import (
 )
 
 type Config struct {
-	AppName    string
-	ConnectStr string
+	AppName   string
+	MongoURI  string
+	DBName    string
+	RedisAddr string
 }
 
 var Cfg Config
@@ -16,7 +18,9 @@ var Cfg Config
 func LoadConfig() {
 	godotenv.Load("./configs/.env")
 	Cfg = Config{
-		AppName:    os.Getenv("APP_NAME"),
-		ConnectStr: os.Getenv("DB_CONN_STR"),
+		AppName:   os.Getenv("APP_NAME"),
+		MongoURI:  os.Getenv("MONGO_URI"),
+		DBName:    os.Getenv("DB_NAME"),
+		RedisAddr: os.Getenv("REDIS_ADDR"),
 	}
 }

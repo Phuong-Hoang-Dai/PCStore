@@ -1,7 +1,10 @@
 package service
 
 import (
+	"context"
+
 	"github.com/Phuong-Hoang-Dai/DDStore/app/product_service/internal/model"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 type productManager struct {
@@ -18,50 +21,32 @@ func NewProductService(repos ProductRepos) ProductService {
 	}
 }
 
-func (service productManager) CreateProduct(data model.Product) (int, error) {
-	if id, err := service.repository.CreateProduct(data); err != nil {
-		return 0, err
+func (service productManager) CreateProduct(ctx context.Context, data model.Product) (bson.ObjectID, error) {
+	if id, err := service.repository.CreateProduct(ctx, data); err != nil {
+		return bson.NilObjectID, err
 	} else {
-		return id, err
+		return id, nil
 	}
 }
 
-func (service productManager) UpdateProduct(data model.Product) error {
-	if err := service.repository.UpdateProduct(data); err != nil {
-		return err
-	} else {
-		return nil
-	}
+func (service productManager) UpdateProduct(ctx context.Context, data model.Product) error {
+	return service.repository.UpdateProduct(ctx, data)
 }
 
-func (service productManager) GetProducts(p *model.Paging) (data []model.Product, err error) {
+func (service productManager) GetProducts(ctx context.Context, p *model.Paging) ([]model.Product, error) {
 	p.Process()
-	if data, err = service.repository.GetProducts(*p); err != nil {
-		return nil, err
-	}
-	return data, nil
+	return service.repository.GetProducts(ctx, *p)
 }
 
-func (service productManager) GetProductsByCate(p *model.Paging, cate model.Category) (data []model.Product, err error) {
+func (service productManager) GetProductsByCate(ctx context.Context, p *model.Paging, cate model.Category) ([]model.Product, error) {
 	p.Process()
-	if data, err = service.repository.GetProductsByCate(*p, cate); err != nil {
-		return nil, err
-	}
-	return data, nil
+	return service.repository.GetProductsByCate(ctx, *p, cate)
 }
 
-func (service productManager) GetProductById(id int) (data model.Product, err error) {
-	if data, err := service.repository.GetProductById(id); err != nil {
-		return data, err
-	} else {
-		return data, nil
-	}
+func (service productManager) GetProductById(ctx context.Context, id bson.ObjectID) (model.Product, error) {
+	return service.repository.GetProductById(ctx, id)
 }
 
-func (service productManager) DeleteProduct(id int) error {
-	if err := service.repository.DeleteProduct(id); err != nil {
-		return err
-	} else {
-		return nil
-	}
+func (service productManager) DeleteProduct(ctx context.Context, id bson.ObjectID) error {
+	return service.repository.DeleteProduct(ctx, id)
 }

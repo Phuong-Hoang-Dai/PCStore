@@ -9,19 +9,21 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
-func SetupDB() (client *mongo.Client, err error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
+func SetupDB(ctx context.Context) (*mongo.Client, *mongo.Database, error) {
+	opts := options.Client().
+		ApplyURI(configs.Cfg.MongoURI).
+		SetMaxPoolSize(10).
+		SetMinPoolSize(2).
+		SetMaxConnIdleTime(5 * time.Minute)
 
-	dsn := configs.Cfg.ConnectStr
-	client, err = mongo.Connect(options.Client().ApplyURI(dsn))
+	client, err := mongo.Connect(opts)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if err = client.Ping(ctx, nil); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return client, nil
+	return client, client.Database(configs.Cfg.DBName), nil
 }

@@ -1,8 +1,12 @@
 package main
 
 import (
-	"fmt"
+	"context"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/Phuong-Hoang-Dai/DDStore/app/product_service/configs"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/product_service/db"
@@ -11,13 +15,31 @@ import (
 
 func main() {
 	configs.LoadConfig()
-	fmt.Println("this is connectr: ", configs.Cfg.ConnectStr)
 
-	mongoClient, err := db.SetupDB()
-	redisCLient := db.ExampleClient()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	mongoClient, _, err := db.SetupDB(ctx)
 	if err != nil {
-		log.Fatal("Error connecting database")
+		log.Fatal("Error connecting database: ", err)
 	}
 
-	handler.SetupHttp(mongoClient, redisCLient)
+	redisClient, err := db.SetupRedis(ctx)
+	if err != nil {
+		log.Fatal("Error connecting redis: ", err)
+	}
+
+	handler.SetupHttp(mongoClient, redisClient)
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	log.Println("shutting down...")
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+
+	mongoClient.Disconnect(shutdownCtx)
+	redisClient.Close()
+	log.Println("done")
 }
