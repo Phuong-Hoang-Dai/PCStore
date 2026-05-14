@@ -12,27 +12,16 @@ type Product struct {
 	Desc      string
 	Brand     string
 	Cate      Category
-	Image     string
+	Type      string
+	Images    []Media
 	CreatedAt time.Time
 	UpdatedAt time.Time
 	DeletedAt gorm.DeletedAt
 }
 
-type Option struct {
-	Name       string
-	Value      []string
-	IsRequired bool
-}
-
-type OptionValue struct {
-	Name  string
-	Value string
-}
-
-type Variant struct {
-	Id     int
-	Sku    string
-	option OptionValue
+type Media struct {
+	Url  string
+	Role string
 }
 
 type Paging struct {

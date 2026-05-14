@@ -8,18 +8,21 @@ import (
 	"github.com/Phuong-Hoang-Dai/DDStore/app/product_service/internal/repos"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/product_service/internal/service"
 	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 	"gorm.io/gorm"
 )
 
-type ProductService struct {
-	productRepos service.ProductRepos
+type ProductHandler struct {
+	productService service.ProductService
 }
 
-func Init(db *gorm.DB) ProductService {
-	return ProductService{productRepos: repos.NewMysqlProductRepo(db)}
+func Init(db *mongo.Client) ProductHandler {
+	col := db.Database("ddstore").Collection("product")
+	repos := repos.NewMongoProductRepo(col)
+	return ProductHandler{productService: service.NewProductService(repos)}
 }
 
-func (p ProductService) CreateProduct() func(ctx *gin.Context) {
+func (p ProductHandler) CreateProduct() func(ctx *gin.Context) {
 	return func(ctx *gin.Context) {
 		var data model.Product
 
@@ -27,11 +30,8 @@ func (p ProductService) CreateProduct() func(ctx *gin.Context) {
 			responeError(http.StatusBadRequest, err, ctx)
 			return
 		}
-		if data.CategoryID == 0 {
-			data.CategoryID = 1
-		}
 
-		id, err := service.CreateProduct(data, p.productRepos)
+		id, err := p.productService.CreateProduct(data)
 		if err != nil {
 			responeError(http.StatusInternalServerError, err, ctx)
 			return
@@ -47,7 +47,7 @@ func (p ProductService) CreateProduct() func(ctx *gin.Context) {
 	}
 }
 
-func (p ProductService) GetProductById() func(ctx *gin.Context) {
+func (p ProductHandler) GetProductById() func(ctx *gin.Context) {
 	return func(ctx *gin.Context) {
 		id, err := strconv.Atoi(ctx.Param("id"))
 		if err != nil {
@@ -56,7 +56,7 @@ func (p ProductService) GetProductById() func(ctx *gin.Context) {
 		}
 
 		var data model.Product
-		if data, err = service.GetProductById(id, p.productRepos); err != nil {
+		if data, err = p.productService.GetProductById(id); err != nil {
 			if err == gorm.ErrRecordNotFound {
 				responeError(http.StatusNotFound, err, ctx)
 				return
@@ -74,7 +74,7 @@ func (p ProductService) GetProductById() func(ctx *gin.Context) {
 	}
 }
 
-func (p ProductService) UpdateProduct() func(ctx *gin.Context) {
+func (p ProductHandler) UpdateProduct() func(ctx *gin.Context) {
 	return func(ctx *gin.Context) {
 		id, err := strconv.Atoi(ctx.Param("id"))
 		if err != nil {
@@ -88,7 +88,7 @@ func (p ProductService) UpdateProduct() func(ctx *gin.Context) {
 		}
 		data.Id = id
 
-		if err := service.UpdateProduct(data, p.productRepos); err != nil {
+		if err := p.productService.UpdateProduct(data); err != nil {
 			if err == gorm.ErrRecordNotFound {
 				responeError(http.StatusNotFound, err, ctx)
 			} else {
@@ -105,7 +105,7 @@ func (p ProductService) UpdateProduct() func(ctx *gin.Context) {
 	}
 }
 
-func (p ProductService) DeleteProduct() func(ctx *gin.Context) {
+func (p ProductHandler) DeleteProduct() func(ctx *gin.Context) {
 	return func(ctx *gin.Context) {
 		id, err := strconv.Atoi(ctx.Param("id"))
 		if err != nil {
@@ -113,7 +113,7 @@ func (p ProductService) DeleteProduct() func(ctx *gin.Context) {
 			return
 		}
 
-		if err := service.DeleteProduct(id, p.productRepos); err != nil {
+		if err := p.productService.DeleteProduct(id); err != nil {
 			if err == gorm.ErrRecordNotFound {
 				responeError(http.StatusNotFound, err, ctx)
 			} else {
@@ -132,7 +132,7 @@ func (p ProductService) DeleteProduct() func(ctx *gin.Context) {
 	}
 }
 
-func (p ProductService) GetProducts() func(ctx *gin.Context) {
+func (p ProductHandler) GetProducts() func(ctx *gin.Context) {
 	return func(ctx *gin.Context) {
 		var paging model.Paging
 		var err error
@@ -149,7 +149,7 @@ func (p ProductService) GetProducts() func(ctx *gin.Context) {
 		}
 
 		var data []model.Product
-		if data, err = service.GetProducts(&paging, p.productRepos); err != nil {
+		if data, err = p.productService.GetProducts(&paging); err != nil {
 			responeError(http.StatusInternalServerError, err, ctx)
 			return
 		}
@@ -167,7 +167,7 @@ func (p ProductService) GetProducts() func(ctx *gin.Context) {
 	}
 }
 
-func (p ProductService) GetProductsByCate() func(ctx *gin.Context) {
+func (p ProductHandler) GetProductsByCate() func(ctx *gin.Context) {
 	return func(ctx *gin.Context) {
 		var paging model.Paging
 		var err error
@@ -192,7 +192,7 @@ func (p ProductService) GetProductsByCate() func(ctx *gin.Context) {
 		}
 
 		var data []model.Product
-		if data, err = service.GetProductsByCate(&paging, p.productRepos, cate); err != nil {
+		if data, err = p.productService.GetProductsByCate(&paging, cate); err != nil {
 			responeError(http.StatusInternalServerError, err, ctx)
 			return
 		}
@@ -206,88 +206,6 @@ func (p ProductService) GetProductsByCate() func(ctx *gin.Context) {
 				"limit":  paging.Limit,
 				"total":  len(data),
 			},
-		})
-	}
-}
-
-func (p ProductService) GetStock() func(ctx *gin.Context) {
-	return func(ctx *gin.Context) {
-		var data []service.OrderItemsDto
-		if err := ctx.ShouldBind(&data); err != nil {
-			responeError(http.StatusBadRequest, err, ctx)
-			return
-		}
-
-		if err := service.GetStock(data, p.productRepos); err != nil {
-			switch err {
-			case gorm.ErrRecordNotFound:
-				responeError(http.StatusNotFound, err, ctx)
-			case model.ErrOutOfStock:
-				responeError(http.StatusBadRequest, err, ctx)
-			default:
-				responeError(http.StatusInternalServerError, err, ctx)
-			}
-			return
-		}
-
-		ctx.JSON(http.StatusOK, gin.H{
-			"success": true,
-			"message": "Update Stock successfully",
-		})
-	}
-}
-
-func (p ProductService) RestoreStock() func(ctx *gin.Context) {
-	return func(ctx *gin.Context) {
-		var data []service.OrderItemsDto
-		if err := ctx.ShouldBind(&data); err != nil {
-			responeError(http.StatusBadRequest, err, ctx)
-			return
-		}
-
-		if err := service.RestoreStock(data, p.productRepos); err != nil {
-			switch err {
-			case gorm.ErrRecordNotFound:
-				responeError(http.StatusNotFound, err, ctx)
-			case model.ErrOutOfStock:
-				responeError(http.StatusBadRequest, err, ctx)
-			default:
-				responeError(http.StatusInternalServerError, err, ctx)
-			}
-			return
-		}
-
-		ctx.JSON(http.StatusOK, gin.H{
-			"success": true,
-			"message": "Restore Stock successfully",
-		})
-	}
-}
-
-func (p ProductService) GetPriceProduct() func(ctx *gin.Context) {
-	return func(ctx *gin.Context) {
-		var data []service.OrderItemsDto
-		if err := ctx.ShouldBind(&data); err != nil {
-			responeError(http.StatusBadRequest, err, ctx)
-			return
-		}
-
-		if err := service.GetPriceProduct(&data, p.productRepos); err != nil {
-			switch err {
-			case gorm.ErrRecordNotFound:
-				responeError(http.StatusNotFound, err, ctx)
-			case model.ErrOutOfStock:
-				responeError(http.StatusBadRequest, err, ctx)
-			default:
-				responeError(http.StatusInternalServerError, err, ctx)
-			}
-			return
-		}
-
-		ctx.JSON(http.StatusOK, gin.H{
-			"success": true,
-			"message": "Prices of Products retrieved successfully",
-			"data":    data,
 		})
 	}
 }

@@ -13,11 +13,11 @@ func main() {
 	configs.LoadConfig()
 	fmt.Println("this is connectr: ", configs.Cfg.ConnectStr)
 
-	mongodb, err := db.SetupDB()
-	db.ExampleClient()
+	mongoClient, err := db.SetupDB()
+	redisCLient := db.ExampleClient()
 	if err != nil {
 		log.Fatal("Error connecting database")
 	}
 
-	handler.SetupHttp(db)
+	handler.SetupHttp(mongoClient, redisCLient)
 }

@@ -21,3 +21,12 @@ type CateRepos interface {
 	GetCates() ([]model.Category, error)
 	DeleteCate(id int) error
 }
+
+type ProductService interface {
+	CreateProduct(data model.Product) (int, error)
+	UpdateProduct(data model.Product) error
+	GetProducts(p *model.Paging) ([]model.Product, error)
+	GetProductsByCate(p *model.Paging, cate model.Category) ([]model.Product, error)
+	GetProductById(id int) (model.Product, error)
+	DeleteProduct(id int) error
+}
