@@ -10,6 +10,7 @@ import (
 	"github.com/Phuong-Hoang-Dai/DDStore/app/product_service/internal/repos"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/product_service/internal/service"
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 )
@@ -18,10 +19,10 @@ type ProductHandler struct {
 	productService service.ProductService
 }
 
-func NewProductHandler(db *mongo.Client) ProductHandler {
+func NewProductHandler(db *mongo.Client, redis *redis.Client) ProductHandler {
 	col := db.Database(configs.Cfg.DBName).Collection("products")
 	repo := repos.NewMongoProductRepo(col)
-	return ProductHandler{productService: service.NewProductService(repo)}
+	return ProductHandler{productService: service.NewProductService(repo, redis)}
 }
 
 func (p ProductHandler) CreateProduct() gin.HandlerFunc {

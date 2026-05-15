@@ -8,7 +8,7 @@ import (
 )
 
 func SetupHttp(db *mongo.Client, redis *redis.Client) {
-	productHandler := NewProductHandler(db)
+	productHandler := NewProductHandler(db, redis)
 	//	cateService := InitCateService(db)
 	r := gin.Default()
 	product := r.Group("/product")
