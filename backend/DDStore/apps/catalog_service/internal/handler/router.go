@@ -1,16 +1,17 @@
 package handler
 
 import (
-	"go.mongodb.org/mongo-driver/v2/mongo"
-
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
 func SetupHttp(db *mongo.Client, redis *redis.Client) {
 	productHandler := NewProductHandler(db, redis)
 	//	cateService := InitCateService(db)
 	r := gin.Default()
+	r.Use(cors.Default())
 	product := r.Group("/product")
 	{
 		product.POST("", productHandler.CreateProduct())

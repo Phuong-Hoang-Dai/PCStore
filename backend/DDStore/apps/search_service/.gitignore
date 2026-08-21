@@ -1,0 +1,6 @@
+# local env
+configs/.env
+
+# build output
+/search_service
+search_service.exe

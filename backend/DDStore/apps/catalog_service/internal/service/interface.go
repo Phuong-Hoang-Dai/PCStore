@@ -11,6 +11,7 @@ type ProductRepos interface {
 	CreateProduct(ctx context.Context, data model.Product) (bson.ObjectID, error)
 	UpdateProduct(ctx context.Context, data model.Product) error
 	UpdateProducts(ctx context.Context, data []model.Product) error
+	IsProductExist(ctx context.Context, id bson.ObjectID) (bool, error)
 	GetProductById(ctx context.Context, id bson.ObjectID) (model.Product, error)
 	GetProducts(ctx context.Context, p model.Paging) ([]model.Product, error)
 	GetProductsByCate(ctx context.Context, p model.Paging, cate model.Category) ([]model.Product, error)

@@ -7,16 +7,23 @@ import (
 )
 
 type Product struct {
-	Id        bson.ObjectID `bson:"_id,omitempty" json:"id"`
-	Name      string        `bson:"name"          json:"name"`
-	Desc      string        `bson:"description"   json:"description"`
-	Brand     string        `bson:"brand"         json:"brand"`
-	Cate      Category      `bson:"cate"          json:"cate"`
-	Type      string        `bson:"type"          json:"type"`
-	Images    []Media       `bson:"images"        json:"images"`
-	CreatedAt time.Time     `bson:"created_at"    json:"created_at"`
-	UpdatedAt time.Time     `bson:"updated_at"    json:"updated_at"`
-	DeletedAt *time.Time    `bson:"deleted_at"    json:"deleted_at,omitempty"`
+	Id        bson.ObjectID           `bson:"_id,omitempty" json:"id"`
+	Name      string                  `bson:"name"          json:"name"`
+	Desc      string                  `bson:"description"   json:"description"`
+	Brand     string                  `bson:"brand"         json:"brand"`
+	Cate      Category                `bson:"cate"          json:"cate"`
+	Price     float64                 `bson:"price"         json:"price"`
+	Type      string                  `bson:"type"          json:"type"`
+	Images    []Media                 `bson:"images"        json:"images"`
+	Option    map[string][]Commponent `bson:"upgrade"       json:"upgrade"`
+	CreatedAt time.Time               `bson:"created_at"    json:"created_at"`
+	UpdatedAt time.Time               `bson:"updated_at"    json:"updated_at"`
+	DeletedAt *time.Time              `bson:"deleted_at"    json:"deleted_at,omitempty"`
+}
+
+type Commponent struct {
+	Id         bson.ObjectID `bson:"_id" json:"id"`
+	IsSelected bool          `bson:"isSelected"     json:"isSelected"`
 }
 
 type Media struct {

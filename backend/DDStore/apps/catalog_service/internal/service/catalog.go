@@ -3,7 +3,9 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/Phuong-Hoang-Dai/DDStore/app/product_service/internal/model"
@@ -28,6 +30,11 @@ func NewProductService(repos ProductRepos, redis *redis.Client) ProductService {
 }
 
 func (service productManager) CreateProduct(ctx context.Context, data model.Product) (bson.ObjectID, error) {
+	isValid, err := validateProduct(ctx, data, service.repository)
+	if !isValid {
+		return bson.NilObjectID, err
+	}
+
 	if id, err := service.repository.CreateProduct(ctx, data); err != nil {
 		return bson.NilObjectID, err
 	} else {
@@ -36,6 +43,11 @@ func (service productManager) CreateProduct(ctx context.Context, data model.Prod
 }
 
 func (service productManager) UpdateProduct(ctx context.Context, data model.Product) error {
+	isValid, err := validateProduct(ctx, data, service.repository)
+	if !isValid {
+		return err
+	}
+
 	return service.repository.UpdateProduct(ctx, data)
 }
 
@@ -44,6 +56,7 @@ func (service productManager) GetProducts(ctx context.Context, p *model.Paging) 
 
 	data, err := service.rdb.Get(ctx, cacheKey).Bytes()
 	if err == nil {
+		log.Print("Cache hit")
 		json.Unmarshal(data, &products)
 		return products, nil
 	}
@@ -55,7 +68,9 @@ func (service productManager) GetProducts(ctx context.Context, p *model.Paging) 
 	}
 
 	prs, err := json.Marshal(products)
-	service.rdb.Set(ctx, cacheKey, prs, 30*time.Second)
+	if err == nil {
+		service.rdb.Set(ctx, cacheKey, prs, 30*time.Second)
+	}
 
 	return products, nil
 }
@@ -65,6 +80,7 @@ func (service productManager) GetProductsByCate(ctx context.Context, p *model.Pa
 
 	data, err := service.rdb.Get(ctx, cacheKey).Bytes()
 	if err == nil {
+		log.Print("Cache hit")
 		json.Unmarshal(data, &products)
 		return products, nil
 	}
@@ -76,7 +92,9 @@ func (service productManager) GetProductsByCate(ctx context.Context, p *model.Pa
 	}
 
 	prs, err := json.Marshal(products)
-	service.rdb.Set(ctx, cacheKey, prs, 30*time.Second)
+	if err == nil {
+		service.rdb.Set(ctx, cacheKey, prs, 30*time.Second)
+	}
 
 	return products, nil
 }
@@ -86,6 +104,7 @@ func (service productManager) GetProductById(ctx context.Context, id bson.Object
 
 	data, err := service.rdb.Get(ctx, cacheKey).Bytes()
 	if err == nil {
+		log.Print("Cache hit")
 		json.Unmarshal(data, &product)
 		return product, nil
 	}
@@ -96,11 +115,36 @@ func (service productManager) GetProductById(ctx context.Context, id bson.Object
 	}
 
 	pr, err := json.Marshal(product)
-	service.rdb.Set(ctx, cacheKey, pr, 30*time.Second)
+	if err == nil {
+		service.rdb.Set(ctx, cacheKey, pr, 30*time.Second)
+	}
 
 	return product, nil
 }
 
 func (service productManager) DeleteProduct(ctx context.Context, id bson.ObjectID) error {
 	return service.repository.DeleteProduct(ctx, id)
+}
+
+func validateProduct(ctx context.Context, product model.Product, repo ProductRepos) (bool, error) {
+	errList := ""
+	if product.Type == model.ProductTypeComposite {
+		for _, u := range product.Option {
+			for _, p := range u {
+				isValid, err := repo.IsProductExist(ctx, p.Id)
+				if err != nil {
+					log.Fatal(err)
+					return false, err
+				}
+				if !isValid {
+					errList = fmt.Sprint(errList, p.Id, ", ")
+				}
+			}
+		}
+	}
+	if errList != "" {
+		err := errors.New(fmt.Sprint(model.ErrProductIsInvalid, "(", errList, ")"))
+		return false, err
+	}
+	return true, nil
 }

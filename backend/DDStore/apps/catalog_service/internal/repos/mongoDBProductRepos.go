@@ -29,6 +29,7 @@ func (m mognoProductRepo) CreateProduct(ctx context.Context, data model.Product)
 	data.Id = bson.NewObjectID()
 	data.CreatedAt = time.Now()
 	_, err := m.col.InsertOne(ctx, data)
+
 	return data.Id, err
 }
 
@@ -51,6 +52,7 @@ func (m mognoProductRepo) UpdateProduct(ctx context.Context, data model.Product)
 		"cate":        data.Cate,
 		"type":        data.Type,
 		"images":      data.Images,
+		"price":       data.Price,
 		"updated_at":  time.Now(),
 	}}
 	result, err := m.col.UpdateOne(ctx, filter, update)
@@ -130,4 +132,10 @@ func (m mognoProductRepo) GetProductsByCate(ctx context.Context, p model.Paging,
 	var data []model.Product
 	err = cursor.All(ctx, &data)
 	return data, err
+}
+
+func (m mognoProductRepo) IsProductExist(ctx context.Context, id bson.ObjectID) (bool, error) {
+	filter := bson.M{"_id": id, "deleted_at": nil}
+	isExist, err := m.col.CountDocuments(ctx, filter, options.Count().SetLimit(1))
+	return isExist > 0, err
 }
