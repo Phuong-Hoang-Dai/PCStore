@@ -55,7 +55,7 @@ export const cartCount = createSlice({
       }
           const existingItem = state.order.find((product) => product.id === action.payload.item.id)
       if (existingItem) {
-        existingItem.quantityOrder -= action.payload.quantity;
+        existingItem.quantityOrder += action.payload.quantity;
       }
       if (existingItem && existingItem.quantityOrder <= 0){
           state.order = state.order.filter(product => product.id !== existingItem.id)

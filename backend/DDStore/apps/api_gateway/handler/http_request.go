@@ -43,6 +43,7 @@ func createData(baseUrl string) func(ctx *gin.Context) {
 		if err != nil {
 			responeError(http.StatusBadRequest, Err.ErrCannotReadBody, ctx)
 		}
+
 		bodyData, statusCode, err := makeRequest(http.MethodPost, baseUrl, bytes.NewBuffer(body))
 		if err != nil {
 			responeError(statusCode, err, ctx)
@@ -50,6 +51,18 @@ func createData(baseUrl string) func(ctx *gin.Context) {
 		}
 
 		ctx.JSON(statusCode, bodyData)
+	}
+}
+
+func publishProduct() func(ctx *gin.Context) {
+	return func(ctx *gin.Context) {
+		body, err := io.ReadAll(ctx.Request.Body)
+		if err != nil {
+			responeError(http.StatusBadRequest, Err.ErrCannotReadBody, ctx)
+		}
+		RabbitHandler.PublishProduct(body)
+
+		ctx.JSON(http.StatusAccepted, "")
 	}
 }
 

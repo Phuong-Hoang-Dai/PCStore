@@ -4,6 +4,7 @@ const url = import.meta.env.VITE_API_URL + "/user"
 
 
 export const SignUp = async (user: UserLogin) => {
+  return
   try{
     const res = await fetch(url, {
       method: "POST",
@@ -25,6 +26,8 @@ export const SignUp = async (user: UserLogin) => {
 }
 
 export const SignIn = async (user: UserLogin) => {
+  return
+
   try{
     const res = await fetch(url + "/login", {
       method: "POST",
@@ -46,6 +49,8 @@ export const SignIn = async (user: UserLogin) => {
 }
 
 export const Logout = async () => {
+  return
+
  try{
     const res = await fetch(url + "/logout", {
       method: "GET",
@@ -63,6 +68,12 @@ export const Logout = async () => {
 }
 
 export const TryGetUserByCookie = async ():Promise<User> => {
+  return { id:0,
+      name:"",
+      email:"",
+      roleId: ""
+  }
+
   try{
     const res = await fetch(url + "/me", {
       method: "GET",

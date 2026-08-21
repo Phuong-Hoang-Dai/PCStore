@@ -10,7 +10,7 @@ import (
 
 	"github.com/Phuong-Hoang-Dai/DDStore/app/product_service/configs"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/product_service/db"
-	"github.com/Phuong-Hoang-Dai/DDStore/app/product_service/internal/handler"
+	hl "github.com/Phuong-Hoang-Dai/DDStore/app/product_service/internal/handler"
 )
 
 func main() {
@@ -29,7 +29,9 @@ func main() {
 		log.Fatal("Error connecting redis: ", err)
 	}
 
-	handler.SetupHttp(mongoClient, redisClient)
+	handler := hl.NewRabbitHandler(mongoClient, redisClient, ctx)
+	hl.SetupPublisher(handler, ctx)
+	go handler.CreateConsumer(configs.Cfg.ProductCreatedQueue, handler.ProductCreatedWorker, context.Background())
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
@@ -39,7 +41,7 @@ func main() {
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
 
-	mongoClient.Disconnect(shutdownCtx)
 	redisClient.Close()
+	mongoClient.Disconnect(shutdownCtx)
 	log.Println("done")
 }

@@ -1,7 +1,7 @@
 import { useDispatch, useSelector } from "react-redux";
-import { changeByAmout, increment, selectCart } from "./cartSlice";
+import { changeByAmout, decrement, increment, selectCart } from "./cartSlice";
 import { Swiper, SwiperSlide } from "swiper/react";
-import { Scrollbar } from "swiper/modules";
+import { Mousewheel, Scrollbar } from "swiper/modules";
 import { IoChevronDownSharp, IoChevronUpSharp } from "react-icons/io5";
 import { IoMdClose } from "react-icons/io";
 
@@ -9,7 +9,7 @@ const CartList = () => {
   const cartItem = useSelector(selectCart);
   const dispatch = useDispatch();
   const renderItems = cartItem.order.map((item) => (
-    <SwiperSlide>
+    <SwiperSlide className="h-30">
       <div className="flex flex-row items-center justify-around text-sm h-30 font-medium">
         <img
           src="https://cdn.hstatic.net/products/1000288298/11498_dsc05320_47c7abb602c949308c1f2bc50c3af657_master.jpg"
@@ -31,14 +31,14 @@ const CartList = () => {
           <IoChevronDownSharp
             className="cursor-pointer"
             onClick={() => {
-              dispatch(increment(item));
+              dispatch(decrement(item));
             }}
           />
         </span>
         <IoMdClose
           className="w-1/8 cursor-pointer"
           onClick={() =>
-            dispatch(changeByAmout({ item, quantity: item.quantityOrder }))
+            dispatch(changeByAmout({ item, quantity: -item.quantityOrder }))
           }
         />
       </div>
@@ -58,11 +58,13 @@ const CartList = () => {
         </div>
       </div>
       <Swiper
-        modules={[Scrollbar]}
+        modules={[Scrollbar, Mousewheel]}
         scrollbar={{ draggable: true }}
+        mousewheel={true}
         direction="vertical"
-        className="max-h-90 h-fit"
+        className="h-90"
         slidesPerView="auto"
+        spaceBetween={4}
       >
         {renderItems}
       </Swiper>

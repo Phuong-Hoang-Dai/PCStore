@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"context"
+
 	"github.com/Phuong-Hoang-Dai/DDStore/api_gateway/middleware"
 
 	"github.com/gin-gonic/gin"
@@ -13,6 +15,7 @@ func SetupHttp() {
 	orderAPIUrl := "http://order_service:7777/order"
 
 	r := gin.Default()
+	SetupRabbit(context.Background())
 	r.Use(middleware.CORSMiddleware())
 	api := r.Group("/api")
 	{
@@ -34,7 +37,8 @@ func SetupHttp() {
 			}
 			product := v1.Group("/product")
 			{
-				product.POST("", middleware.VerifyToken(), middleware.RequireRole("admin", "owner"), createData(productAPIUrl))
+				// product.POST("", middleware.VerifyToken(), middleware.RequireRole("admin", "owner"), publishProduct())
+				product.POST("", publishProduct())
 				product.PUT("/:id", middleware.VerifyToken(), middleware.RequireRole("admin", "owner"), updateDataById(productAPIUrl))
 				product.GET("", getDatas(productAPIUrl))
 				product.GET("/:id", getDataById(productAPIUrl))
