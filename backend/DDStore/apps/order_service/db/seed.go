@@ -26,11 +26,11 @@ func SeedData(db *gorm.DB) error {
 	}
 
 	orderItems := []model.OrderItem{
-		{ProductId: 1, Quantity: 2, OrderId: orders[0].Id},
-		{ProductId: 2, Quantity: 1, OrderId: orders[0].Id},
+		{ProductId: "1", Quantity: 2, OrderId: orders[0].Id},
+		{ProductId: "2", Quantity: 1, OrderId: orders[0].Id},
 
-		{ProductId: 3, Quantity: 1, OrderId: orders[1].Id},
-		{ProductId: 4, Quantity: 2, OrderId: orders[1].Id},
+		{ProductId: "3", Quantity: 1, OrderId: orders[1].Id},
+		{ProductId: "4", Quantity: 2, OrderId: orders[1].Id},
 	}
 
 	if err := db.Create(&orderItems).Error; err != nil {

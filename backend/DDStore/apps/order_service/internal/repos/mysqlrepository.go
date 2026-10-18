@@ -1,6 +1,8 @@
 package repos
 
 import (
+	"context"
+
 	"github.com/Phuong-Hoang-Dai/DDStore/app/order_service/internal/model"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/order_service/internal/service"
 
@@ -17,19 +19,19 @@ func NewMysqlOrderRepo(db *gorm.DB) service.OrderRepository {
 	}
 }
 
-func (m mysqlOrderRepo) CreateOrder(data *model.Order) (int, error) {
+func (m mysqlOrderRepo) CreateOrder(data *model.Order, ctx context.Context) (int, error) {
 	result := m.DB.Create(data)
 
 	return data.Id, result.Error
 }
 
-func (m mysqlOrderRepo) GetOrderById(id int) (data model.Order, err error) {
+func (m mysqlOrderRepo) GetOrderById(id int, ctx context.Context) (data model.Order, err error) {
 	result := m.DB.Preload("Items").First(&data, id)
 
 	return data, result.Error
 }
 
-func (m mysqlOrderRepo) UpdateOrder(data model.Order) error {
+func (m mysqlOrderRepo) UpdateOrder(data model.Order, ctx context.Context) error {
 	result := m.DB.Updates(data)
 	if result.RowsAffected == 0 && result.Error == nil {
 		return gorm.ErrRecordNotFound
@@ -37,7 +39,7 @@ func (m mysqlOrderRepo) UpdateOrder(data model.Order) error {
 	return result.Error
 }
 
-func (m mysqlOrderRepo) DeleteOrder(id int) error {
+func (m mysqlOrderRepo) DeleteOrder(id int, ctx context.Context) error {
 	result := m.DB.Delete(&model.Order{Id: id})
 	if result.RowsAffected == 0 && result.Error == nil {
 		return gorm.ErrRecordNotFound
@@ -45,13 +47,13 @@ func (m mysqlOrderRepo) DeleteOrder(id int) error {
 	return result.Error
 }
 
-func (m mysqlOrderRepo) GetOrders(p model.Paging) (orders []model.Order, err error) {
+func (m mysqlOrderRepo) GetOrders(p model.Paging, ctx context.Context) (orders []model.Order, err error) {
 	result := m.DB.Limit(p.Limit).Offset(p.Offset).Find(&orders)
 
 	return orders, result.Error
 }
 
-func (m mysqlOrderRepo) GetHistoryOrders(id int, p model.Paging) (orders []model.Order, err error) {
+func (m mysqlOrderRepo) GetHistoryOrders(id int, p model.Paging, ctx context.Context) (orders []model.Order, err error) {
 	result := m.DB.Order("created_at DESC").Limit(p.Limit).Offset(p.Offset).Where("userId", id).Find(&orders)
 
 	return orders, result.Error

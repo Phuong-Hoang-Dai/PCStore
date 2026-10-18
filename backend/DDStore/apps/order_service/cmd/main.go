@@ -11,7 +11,7 @@ import (
 func main() {
 	configs.LoadConfig()
 
-	db, err := db.SetupDB()
+	db, err := db.SetupPostgres()
 
 	if err != nil {
 		log.Fatal("Error connecting database")

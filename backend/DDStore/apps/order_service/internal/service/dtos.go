@@ -3,7 +3,7 @@ package service
 import "github.com/Phuong-Hoang-Dai/DDStore/app/order_service/internal/model"
 
 type OrderDTO struct {
-	ProductId int     `json:"productId"`
+	ProductId string  `json:"productId"`
 	Quantity  int     `json:"quantity"`
 	Price     float64 `json:"price"`
 	OrderId   int     `json:"orderId"`

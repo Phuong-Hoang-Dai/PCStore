@@ -2,32 +2,40 @@ package model
 
 import (
 	"time"
-
-	"gorm.io/gorm"
 )
 
 type Order struct {
-	Id        int            `json:"orderId" gorm:"column:id"`
-	State     int            `json:"state" gorm:"column:state"`
-	Items     []OrderItem    `json:"items" gorm:"foreignKey:OrderId;references:Id"`
-	Total     float64        `json:"total" gorm:"column:total"`
-	UserId    int            `json:"userId" gorm:"column:userId"`
-	CreatedAt time.Time      `json:"create_at"`
-	UpdatedAt time.Time      `json:"update_at"`
-	DeletedAt gorm.DeletedAt `json:"delete_at" gorm:"index"`
+	Id        int         `json:"orderId"`
+	State     OrderState  `json:"state"`
+	Items     []OrderItem `json:"items"`
+	Total     float64     `json:"total"`
+	UserId    int         `json:"userId"`
+	CreatedAt time.Time   `json:"create_at"`
+	UpdatedAt time.Time   `json:"update_at"`
+	DeletedAt time.Time   `json:"delete_at" `
 }
 
 type OrderItem struct {
-	ProductId int            `json:"productId" gorm:"column:productId"`
-	Quantity  int            `json:"quantity" gorm:"column:quantity"`
-	OrderId   int            `json:"orderId" gorm:"column:orderId"`
-	Price     float64        `json:"price" gorm:"column:price"`
-	CreatedAt time.Time      `json:"create_at"`
-	UpdatedAt time.Time      `json:"update_at"`
-	DeletedAt gorm.DeletedAt `json:"delete_at" gorm:"index"`
+	ProductId string    `json:"productId"`
+	Quantity  int       `json:"quantity"`
+	OrderId   int       `json:"orderId"`
+	Price     float64   `json:"price"`
+	CreatedAt time.Time `json:"create_at"`
+	UpdatedAt time.Time `json:"update_at"`
+	DeletedAt time.Time `json:"delete_at" `
 
-	Order Order `gorm:"foreignKey:OrderId;references:id"`
+	Order Order
 }
+
+type OrderState int
+
+const (
+	Processing OrderState = iota
+	ReadyToPay
+	Payed
+	Completed
+	Cancelled
+)
 
 func (order Order) Validate() bool {
 	if order.Items == nil {

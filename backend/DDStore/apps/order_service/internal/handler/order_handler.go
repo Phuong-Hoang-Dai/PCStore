@@ -10,24 +10,28 @@ import (
 	"github.com/Phuong-Hoang-Dai/DDStore/app/order_service/internal/repos"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/order_service/internal/service"
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"gorm.io/gorm"
 )
 
-type OrderService struct {
-	orderRepos     service.OrderRepository
-	productService productHTTPClient
+type OrderHandler struct {
+	orderService service.OrderService
 }
 
-func Init(db *gorm.DB, url string) OrderService {
-	o := OrderService{
-		orderRepos:     repos.NewMysqlOrderRepo(db),
-		productService: productHTTPClient{baseURL: fmt.Sprint(url, "/product")},
+func Init(db *pgxpool.Pool, url string) OrderHandler {
+	o := OrderHandler{
+		orderService: service.NewOrderService(
+			repos.NewPgOrderRepo(db),
+			productHTTPClient{baseURL: fmt.Sprint(url, "/product")},
+			service.StockService{Repos: repos.NewPgStockRepo(db), ProductService: productHTTPClient{baseURL: fmt.Sprint(url, "/product")}},
+			service.SequencerService{Repos: repos.NewPgSequencerkRepo(db)},
+		),
 	}
 
 	return o
 }
 
-func (o OrderService) CreateOrder() func(ctx *gin.Context) {
+func (o OrderHandler) CreateOrder() func(ctx *gin.Context) {
 	return func(ctx *gin.Context) {
 		userId, err := strconv.Atoi(ctx.Param("id"))
 		if err != nil {
@@ -51,7 +55,7 @@ func (o OrderService) CreateOrder() func(ctx *gin.Context) {
 		}
 
 		data := bodyData.Data
-		id, err := service.CreateOrder(userId, data, o.orderRepos, o.productService)
+		id, err := o.orderService.CreateOrder(userId, data, ctx)
 
 		if err != nil {
 			responeError(http.StatusInternalServerError, err, ctx)
@@ -68,7 +72,7 @@ func (o OrderService) CreateOrder() func(ctx *gin.Context) {
 	}
 }
 
-func (o OrderService) CancelOrder() func(ctx *gin.Context) {
+func (o OrderHandler) CancelOrder() func(ctx *gin.Context) {
 	return func(ctx *gin.Context) {
 		id, err := strconv.Atoi(ctx.Param("id"))
 		if err != nil {
@@ -76,7 +80,7 @@ func (o OrderService) CancelOrder() func(ctx *gin.Context) {
 			return
 		}
 
-		err = service.CancelOrder(id, o.orderRepos, o.productService)
+		err = o.orderService.CancelOrder(id, ctx)
 
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			responeError(http.StatusNotFound, err, ctx)
@@ -95,7 +99,7 @@ func (o OrderService) CancelOrder() func(ctx *gin.Context) {
 	}
 }
 
-func (o OrderService) GetOrderById() func(ctx *gin.Context) {
+func (o OrderHandler) GetOrderById() func(ctx *gin.Context) {
 	return func(ctx *gin.Context) {
 		id, err := strconv.Atoi(ctx.Param("id"))
 		if err != nil {
@@ -103,7 +107,7 @@ func (o OrderService) GetOrderById() func(ctx *gin.Context) {
 			return
 		}
 
-		data, err := service.GetOrderById(id, o.orderRepos)
+		data, err := o.orderService.GetOrderById(id, ctx)
 
 		if err == gorm.ErrRecordNotFound {
 			responeError(http.StatusNotFound, err, ctx)
@@ -123,7 +127,7 @@ func (o OrderService) GetOrderById() func(ctx *gin.Context) {
 	}
 }
 
-func (o OrderService) UpdateOrderState() func(ctx *gin.Context) {
+func (o OrderHandler) UpdateOrderState() func(ctx *gin.Context) {
 	return func(ctx *gin.Context) {
 		id, err := strconv.Atoi(ctx.Param("id"))
 		if err != nil {
@@ -132,14 +136,14 @@ func (o OrderService) UpdateOrderState() func(ctx *gin.Context) {
 		}
 
 		data := struct {
-			State int `json:"state"`
+			State model.OrderState `json:"state"`
 		}{}
 
 		if err := ctx.ShouldBind(&data); err != nil {
 			responeError(http.StatusBadRequest, err, ctx)
 		}
 
-		if err := service.UpdateOrder(id, data.State, o.orderRepos); err != nil {
+		if err := o.orderService.UpdateOrder(id, data.State, ctx); err != nil {
 			if err == gorm.ErrRecordNotFound {
 				responeError(http.StatusNotFound, err, ctx)
 			} else {
@@ -155,7 +159,7 @@ func (o OrderService) UpdateOrderState() func(ctx *gin.Context) {
 	}
 }
 
-func (o OrderService) CompleteOrder() func(ctx *gin.Context) {
+func (o OrderHandler) CompleteOrder() func(ctx *gin.Context) {
 	return func(ctx *gin.Context) {
 		id, err := strconv.Atoi(ctx.Param("id"))
 		if err != nil {
@@ -163,7 +167,7 @@ func (o OrderService) CompleteOrder() func(ctx *gin.Context) {
 			return
 		}
 
-		if err := service.UpdateOrder(id, model.Completed, o.orderRepos); err != nil {
+		if err := o.orderService.UpdateOrder(id, model.Completed, ctx); err != nil {
 			if err == gorm.ErrRecordNotFound {
 				responeError(http.StatusNotFound, err, ctx)
 			} else {
@@ -179,7 +183,7 @@ func (o OrderService) CompleteOrder() func(ctx *gin.Context) {
 	}
 }
 
-func (o OrderService) GetOrders() func(ctx *gin.Context) {
+func (o OrderHandler) GetOrders() func(ctx *gin.Context) {
 	return func(ctx *gin.Context) {
 		var p model.Paging
 		var err error
@@ -196,7 +200,7 @@ func (o OrderService) GetOrders() func(ctx *gin.Context) {
 		}
 
 		var data []model.Order
-		if data, err = service.GetOrders(&p, o.orderRepos); err != nil {
+		if data, err = o.orderService.GetOrders(&p, ctx); err != nil {
 			responeError(http.StatusInternalServerError, err, ctx)
 			return
 		}
@@ -214,7 +218,7 @@ func (o OrderService) GetOrders() func(ctx *gin.Context) {
 	}
 }
 
-func (o OrderService) GetHistoryOrders() func(ctx *gin.Context) {
+func (o OrderHandler) GetHistoryOrders() func(ctx *gin.Context) {
 	return func(ctx *gin.Context) {
 		var p model.Paging
 		var err error
@@ -237,7 +241,7 @@ func (o OrderService) GetHistoryOrders() func(ctx *gin.Context) {
 		}
 
 		var data []model.Order
-		if data, err = service.GetHistoryOrders(userId, &p, o.orderRepos); err != nil {
+		if data, err = o.orderService.GetHistoryOrders(userId, &p, ctx); err != nil {
 			responeError(http.StatusInternalServerError, err, ctx)
 			return
 		}

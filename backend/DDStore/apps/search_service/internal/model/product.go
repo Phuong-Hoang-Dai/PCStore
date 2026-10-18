@@ -2,10 +2,6 @@ package model
 
 import "time"
 
-// Product is the document stored in and returned from Elasticsearch.
-// It mirrors the catalog_service product model, but uses a string Id
-// (the Elasticsearch document _id) and JSON tags only, since Elasticsearch
-// speaks JSON.
 type Product struct {
 	Id        string    `json:"id"`
 	Name      string    `json:"name"`

@@ -66,5 +66,18 @@ services:
             DB_CONN_STR: "root:123@tcp(mysql:3306)/DDStore?charset=utf8mb4&parseTime=True&loc=Local"
         restart: always
         ports:
-            - "6666"       
+            - "6666"
+    payment_service:
+        container_name: payment_service
+        build:
+            context: ./apps/payment_service
+            dockerfile: Dockerfile
+        depends_on:
+            - mysql
+        environment:
+            APP_NAME: "DDStore"
+            DB_CONN_STR: "root:123@tcp(mysql:3306)/DDStore?charset=utf8mb4&parseTime=True&loc=Local"
+        restart: always
+        ports:
+            - "5555"
 

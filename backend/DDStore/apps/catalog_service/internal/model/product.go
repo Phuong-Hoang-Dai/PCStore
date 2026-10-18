@@ -10,6 +10,7 @@ type Product struct {
 	Id        bson.ObjectID           `bson:"_id,omitempty" json:"id"`
 	Name      string                  `bson:"name"          json:"name"`
 	Desc      string                  `bson:"description"   json:"description"`
+	State     ProductState            `bson:"state"         json:"state"`
 	Brand     string                  `bson:"brand"         json:"brand"`
 	Cate      Category                `bson:"cate"          json:"cate"`
 	Price     float64                 `bson:"price"         json:"price"`
@@ -20,6 +21,13 @@ type Product struct {
 	UpdatedAt time.Time               `bson:"updated_at"    json:"updated_at"`
 	DeletedAt *time.Time              `bson:"deleted_at"    json:"deleted_at,omitempty"`
 }
+
+type ProductState int
+
+const (
+	IsAvailable ProductState = iota
+	OutOfStock
+)
 
 type Commponent struct {
 	Id         bson.ObjectID `bson:"_id" json:"id"`

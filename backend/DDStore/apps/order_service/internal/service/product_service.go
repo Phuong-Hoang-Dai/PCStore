@@ -1,7 +1,12 @@
 package service
 
+import (
+	"context"
+
+	"github.com/Phuong-Hoang-Dai/DDStore/app/model/catalog"
+)
+
 type ProductService interface {
-	GetStock(items []OrderDTO) error
-	RestoreStock(items []OrderDTO) error
 	GetPriceProduct(items *[]OrderDTO) error
+	UpdateProductState(productId string, state catalog.ProductState, ctx context.Context) (err error)
 }

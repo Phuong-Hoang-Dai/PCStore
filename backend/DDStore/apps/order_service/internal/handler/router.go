@@ -1,12 +1,13 @@
 package handler
 
 import (
-	"gorm.io/gorm"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func SetupHttp(db *gorm.DB) {
+func SetupHttp(db *pgxpool.Pool) {
 	baseUrl := "http://product_service:8888"
 
 	orderService := Init(db, baseUrl)
@@ -22,6 +23,11 @@ func SetupHttp(db *gorm.DB) {
 		order.DELETE("/:id", orderService.CancelOrder())
 		order.PUT("/:id", orderService.UpdateOrderState())
 		order.POST("/completeOrder/:id", orderService.CompleteOrder())
+		order.GET("/healthcheck", func(ctx *gin.Context) {
+			ctx.JSON(http.StatusAccepted, gin.H{
+				"message": "order service is healthy",
+			})
+		})
 	}
 
 	r.Run(":7777")

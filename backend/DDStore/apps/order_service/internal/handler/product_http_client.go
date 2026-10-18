@@ -2,93 +2,19 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 
+	"github.com/Phuong-Hoang-Dai/DDStore/app/model/catalog"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/order_service/internal/service"
 )
 
 type productHTTPClient struct {
 	baseURL string
-}
-
-func (p productHTTPClient) GetStock(items []service.OrderDTO) error {
-	url := fmt.Sprintf("%s/getstock", p.baseURL)
-
-	jsonData, _ := json.Marshal(items)
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-
-		var raw map[string]json.RawMessage
-		if err := json.Unmarshal(body, &raw); err != nil {
-			return errors.New("failed to read body respone")
-		}
-
-		var errMsg string
-		if rawErr, ok := raw["error"]; ok {
-			json.Unmarshal(rawErr, &errMsg)
-			return errors.New(errMsg)
-		}
-
-		return errors.New("failed to get stock")
-	}
-
-	return nil
-}
-
-func (p productHTTPClient) RestoreStock(items []service.OrderDTO) error {
-	url := fmt.Sprintf("%s/restore", p.baseURL)
-
-	jsonData, _ := json.Marshal(items)
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-
-		var raw map[string]json.RawMessage
-		if err := json.Unmarshal(body, &raw); err != nil {
-			return errors.New("failed to read body respone")
-		}
-
-		var errMsg string
-		if rawErr, ok := raw["error"]; ok {
-			json.Unmarshal(rawErr, &errMsg)
-			return errors.New(errMsg)
-		}
-
-		return errors.New("failed to get stock")
-	}
-
-	return nil
 }
 
 func (p productHTTPClient) GetPriceProduct(items *[]service.OrderDTO) error {
@@ -127,6 +53,32 @@ func (p productHTTPClient) GetPriceProduct(items *[]service.OrderDTO) error {
 		}
 	} else {
 		return errors.New("failed to get data")
+	}
+
+	return nil
+}
+
+func (p productHTTPClient) UpdateProductState(productId string, state catalog.ProductState, ctx context.Context) (err error) {
+	url := fmt.Sprintf("%s/", p.baseURL)
+
+	jsonData, _ := json.Marshal(map[string]any{
+		"product_id": productId,
+		"state":      state,
+	})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(jsonData))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("update product state: unexpected status %d", resp.StatusCode)
 	}
 
 	return nil

@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"net/http"
+
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
@@ -20,6 +22,11 @@ func SetupHttp(db *mongo.Client, redis *redis.Client) {
 		product.GET("/cate/:id", productHandler.GetProductsByCate())
 		product.PUT("/:id", productHandler.UpdateProduct())
 		product.DELETE("/:id", productHandler.DeleteProduct())
+		product.GET("/healthcheck", func(ctx *gin.Context) {
+			ctx.JSON(http.StatusAccepted, gin.H{
+				"message": "catalog service is healthy",
+			})
+		})
 	}
 	// cate := r.Group("/category")
 	// {
