@@ -25,6 +25,7 @@ func Init(db *pgxpool.Pool, url string) OrderHandler {
 			productHTTPClient{baseURL: fmt.Sprint(url, "/product")},
 			service.StockService{Repos: repos.NewPgStockRepo(db), ProductService: productHTTPClient{baseURL: fmt.Sprint(url, "/product")}},
 			service.SequencerService{Repos: repos.NewPgSequencerkRepo(db)},
+			service.PaymentService{Repo: repos.NewPgPaymentRepo(db)},
 		),
 	}
 

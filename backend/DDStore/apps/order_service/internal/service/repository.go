@@ -26,5 +26,6 @@ type SequenecerRepository interface {
 type PaymentRepository interface {
 	CreateOrderPayment(data model.OrderPayment, ctx context.Context) (int, error)
 	UpdateOrderPayment(data model.OrderPayment, ctx context.Context) error
+	UpdatePaymentState(orderId int, state model.PaymentState, ctx context.Context) error
 	GetOrderPayment(orderId int, ctx context.Context) (model.OrderPayment, error)
 }

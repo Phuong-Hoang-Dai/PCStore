@@ -18,6 +18,7 @@ func SetupHttp(db *mongo.Client, redis *redis.Client) {
 	{
 		product.POST("", productHandler.CreateProduct())
 		product.POST("/ids", productHandler.GetProductsByIds())
+		product.POST("/getprices", productHandler.GetPrices())
 		product.GET("", productHandler.GetProducts())
 		product.GET("/:id", productHandler.GetProductById())
 		product.GET("/cate/:id", productHandler.GetProductsByCate())

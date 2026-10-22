@@ -12,6 +12,7 @@ type Config struct {
 	StripeSecretKey  string
 	StripeSuccessURL string
 	StripeCancelURL  string
+	StripeWebhookKey string
 }
 
 var Cfg Config
@@ -24,5 +25,6 @@ func LoadConfig() {
 		StripeSecretKey:  os.Getenv("STRIPE_SECRET_KEY"),
 		StripeSuccessURL: os.Getenv("STRIPE_SUCCESS_URL"),
 		StripeCancelURL:  os.Getenv("STRIPE_CANCEL_URL"),
+		StripeWebhookKey: os.Getenv("STRIPE_WEBHOOK_SECRET"),
 	}
 }

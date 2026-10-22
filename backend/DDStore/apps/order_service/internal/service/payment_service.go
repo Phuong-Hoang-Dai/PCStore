@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strconv"
@@ -116,6 +117,48 @@ func (p PaymentService) CreateCheckoutSession(orderId int, ctx context.Context) 
 	}
 
 	return session.URL, nil
+}
+
+// HandleWebhookEvent updates the payment and order once Stripe reports the checkout result.
+// Card payments finish with checkout.session.completed; delayed methods (bank transfer, ...)
+// complete later with async_payment_succeeded / async_payment_failed.
+func (p PaymentService) HandleWebhookEvent(event stripe.Event, ctx context.Context) error {
+	switch event.Type {
+	case stripe.EventTypeCheckoutSessionCompleted,
+		stripe.EventTypeCheckoutSessionAsyncPaymentSucceeded,
+		stripe.EventTypeCheckoutSessionAsyncPaymentFailed,
+		stripe.EventTypeCheckoutSessionExpired:
+	default:
+		return nil
+	}
+
+	var session stripe.CheckoutSession
+	if err := json.Unmarshal(event.Data.Raw, &session); err != nil {
+		return err
+	}
+	orderId, err := strconv.Atoi(session.ClientReferenceID)
+	if err != nil {
+		return fmt.Errorf("invalid client_reference_id %q: %w", session.ClientReferenceID, err)
+	}
+
+	switch event.Type {
+	case stripe.EventTypeCheckoutSessionCompleted:
+		if session.PaymentStatus != stripe.CheckoutSessionPaymentStatusPaid {
+			return nil
+		}
+		return p.completePayment(orderId, ctx)
+	case stripe.EventTypeCheckoutSessionAsyncPaymentSucceeded:
+		return p.completePayment(orderId, ctx)
+	default:
+		return p.Repo.UpdatePaymentState(orderId, model.IsFailed, ctx)
+	}
+}
+
+func (p PaymentService) completePayment(orderId int, ctx context.Context) error {
+	if err := p.Repo.UpdatePaymentState(orderId, model.IsCompleted, ctx); err != nil {
+		return err
+	}
+	return p.OrderService.UpdateOrder(orderId, model.Payed, ctx)
 }
 
 func (p PaymentService) getOrCreateCustomer(ctx context.Context, userId int, stripeUserId string) (stripeUser *stripe.Customer, err error) {

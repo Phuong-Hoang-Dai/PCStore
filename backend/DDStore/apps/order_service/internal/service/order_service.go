@@ -6,19 +6,27 @@ import (
 	"github.com/Phuong-Hoang-Dai/DDStore/app/order_service/internal/model"
 )
 
+// PaymentCreator is the part of PaymentService that OrderService needs.
+// An interface avoids a recursive struct, since PaymentService holds an OrderService.
+type PaymentCreator interface {
+	CreatePaymentInfo(orderId int, userId int, ctx context.Context) (int, error)
+}
+
 type OrderService struct {
 	repos            OrderRepository
 	productService   ProductService
 	stockService     StockService
 	sequencerService SequencerService
+	paymentService   PaymentCreator
 }
 
-func NewOrderService(repos OrderRepository, productSvc ProductService, stockSvc StockService, sequencerSvc SequencerService) OrderService {
+func NewOrderService(repos OrderRepository, productSvc ProductService, stockSvc StockService, sequencerSvc SequencerService, paymentSvc PaymentCreator) OrderService {
 	return OrderService{
 		repos:            repos,
 		productService:   productSvc,
 		stockService:     stockSvc,
 		sequencerService: sequencerSvc,
+		paymentService:   paymentSvc,
 	}
 }
 
@@ -48,6 +56,10 @@ func (svc OrderService) CreateOrder(userId int, items []OrderDTO, ctx context.Co
 
 	id, err := svc.repos.CreateOrder(&order, ctx)
 	if err != nil {
+		return 0, err
+	}
+
+	if _, err := svc.paymentService.CreatePaymentInfo(id, userId, ctx); err != nil {
 		return 0, err
 	}
 

@@ -130,6 +130,37 @@ func (service productManager) GetProductsByIds(ctx context.Context, ids []bson.O
 	return service.repository.GetProductsByIds(ctx, ids)
 }
 
+func (service productManager) GetPrices(ctx context.Context, items []OrderItemsDto) ([]OrderItemsDto, error) {
+	ids := make([]bson.ObjectID, len(items))
+	for i := range items {
+		id, err := bson.ObjectIDFromHex(items[i].ProductId)
+		if err != nil {
+			return nil, fmt.Errorf("%w: invalid product id %s", model.ErrNotFound, items[i].ProductId)
+		}
+		ids[i] = id
+	}
+
+	products, err := service.repository.GetProductsByIds(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+
+	prices := make(map[bson.ObjectID]float64, len(products))
+	for _, p := range products {
+		prices[p.Id] = p.Price
+	}
+
+	for i := range items {
+		price, ok := prices[ids[i]]
+		if !ok {
+			return nil, fmt.Errorf("%w: product %s", model.ErrNotFound, items[i].ProductId)
+		}
+		items[i].Price = price
+	}
+
+	return items, nil
+}
+
 func validateProduct(ctx context.Context, product model.Product, repo ProductRepos) (bool, error) {
 	errList := ""
 	if product.Type == model.ProductTypeComposite {

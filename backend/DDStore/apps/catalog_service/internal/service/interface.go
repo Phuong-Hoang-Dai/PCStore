@@ -34,5 +34,6 @@ type ProductService interface {
 	GetProductsByCate(ctx context.Context, p *model.Paging, cate model.Category) ([]model.Product, error)
 	GetProductById(ctx context.Context, id bson.ObjectID) (model.Product, error)
 	GetProductsByIds(ctx context.Context, ids []bson.ObjectID) ([]model.Product, error)
+	GetPrices(ctx context.Context, items []OrderItemsDto) ([]OrderItemsDto, error)
 	DeleteProduct(ctx context.Context, id bson.ObjectID) error
 }

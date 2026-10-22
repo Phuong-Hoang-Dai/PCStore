@@ -54,6 +54,19 @@ func (p pgPaymentRepo) UpdateOrderPayment(data model.OrderPayment, ctx context.C
 	return nil
 }
 
+func (p pgPaymentRepo) UpdatePaymentState(orderId int, state model.PaymentState, ctx context.Context) error {
+	result, err := p.DB.Exec(ctx,
+		`UPDATE order_payments SET state = $2, updated_at = NOW() WHERE order_id = $1`,
+		orderId, state)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+	return nil
+}
+
 func (p pgPaymentRepo) GetOrderPayment(orderId int, ctx context.Context) (data model.OrderPayment, err error) {
 	err = p.DB.QueryRow(ctx,
 		`SELECT `+orderPaymentColumns+` FROM order_payments WHERE order_id = $1`, orderId,

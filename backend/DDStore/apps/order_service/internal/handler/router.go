@@ -36,6 +36,7 @@ func SetupHttp(db *pgxpool.Pool) {
 	{
 		payment.POST("/:id", paymentService.CreatePaymentInfo())
 		payment.POST("/checkout/:id", paymentService.CreateCheckoutSession())
+		payment.POST("/webhook", paymentService.StripeWebhook())
 	}
 
 	r.Run(":7777")

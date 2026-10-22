@@ -108,6 +108,32 @@ func (p ProductHandler) GetProductsByIds() gin.HandlerFunc {
 	}
 }
 
+func (p ProductHandler) GetPrices() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var items []service.OrderItemsDto
+		if err := c.ShouldBindJSON(&items); err != nil {
+			responeError(http.StatusBadRequest, err, c)
+			return
+		}
+
+		data, err := p.productService.GetPrices(c.Request.Context(), items)
+		if err != nil {
+			if errors.Is(err, model.ErrNotFound) {
+				responeError(http.StatusNotFound, err, c)
+			} else {
+				responeError(http.StatusInternalServerError, err, c)
+			}
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": "Retrieve Prices succesfully",
+			"data":    data,
+		})
+	}
+}
+
 func (p ProductHandler) UpdateProduct() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := bson.ObjectIDFromHex(c.Param("id"))

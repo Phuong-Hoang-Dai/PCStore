@@ -18,7 +18,7 @@ type productHTTPClient struct {
 }
 
 func (p productHTTPClient) GetPriceProduct(items *[]service.OrderDTO) error {
-	url := fmt.Sprintf("%s/getprice", p.baseURL)
+	url := fmt.Sprintf("%s/getprices", p.baseURL)
 
 	jsonData, _ := json.Marshal(items)
 	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
