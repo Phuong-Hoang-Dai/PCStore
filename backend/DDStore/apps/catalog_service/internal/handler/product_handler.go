@@ -74,6 +74,40 @@ func (p ProductHandler) GetProductById() gin.HandlerFunc {
 	}
 }
 
+func (p ProductHandler) GetProductsByIds() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var body struct {
+			Ids []string `json:"ids" binding:"required"`
+		}
+		if err := c.ShouldBind(&body); err != nil {
+			responeError(http.StatusBadRequest, err, c)
+			return
+		}
+
+		ids := make([]bson.ObjectID, len(body.Ids))
+		for i := range body.Ids {
+			id, err := bson.ObjectIDFromHex(body.Ids[i])
+			if err != nil {
+				responeError(http.StatusBadRequest, err, c)
+				return
+			}
+			ids[i] = id
+		}
+
+		data, err := p.productService.GetProductsByIds(c.Request.Context(), ids)
+		if err != nil {
+			responeError(http.StatusInternalServerError, err, c)
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": "Retrieve Products succesfully",
+			"data":    data,
+		})
+	}
+}
+
 func (p ProductHandler) UpdateProduct() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := bson.ObjectIDFromHex(c.Param("id"))

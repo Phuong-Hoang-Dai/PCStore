@@ -58,6 +58,50 @@ func (p productHTTPClient) GetPriceProduct(items *[]service.OrderDTO) error {
 	return nil
 }
 
+func (p productHTTPClient) GetProductsByIds(ids []string, ctx context.Context) (products []catalog.Product, err error) {
+	url := fmt.Sprintf("%s/ids", p.baseURL)
+
+	jsonData, _ := json.Marshal(map[string]any{
+		"ids": ids,
+	})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(jsonData))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return nil, errors.New("failed to read body respone")
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		var errMsg string
+		if rawErr, ok := raw["error"]; ok {
+			json.Unmarshal(rawErr, &errMsg)
+		}
+		return nil, fmt.Errorf("get products by ids: unexpected status %d: %s", resp.StatusCode, errMsg)
+	}
+
+	rawData, ok := raw["data"]
+	if !ok {
+		return nil, errors.New("failed to get data")
+	}
+	if err := json.Unmarshal(rawData, &products); err != nil {
+		return nil, err
+	}
+
+	return products, nil
+}
+
 func (p productHTTPClient) UpdateProductState(productId string, state catalog.ProductState, ctx context.Context) (err error) {
 	url := fmt.Sprintf("%s/", p.baseURL)
 

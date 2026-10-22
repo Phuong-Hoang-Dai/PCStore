@@ -19,13 +19,17 @@ func NewPgPaymentRepo(db *pgxpool.Pool) service.PaymentRepository {
 	}
 }
 
+const orderPaymentColumns = `order_id, user_id, state, amount_total, currency,
+	stripe_user_id, payment_intent_id, checkout_session_id`
+
 func (p pgPaymentRepo) CreateOrderPayment(data model.OrderPayment, ctx context.Context) (int, error) {
 	var id int
 	err := p.DB.QueryRow(ctx,
-		`INSERT INTO order_payments (order_id, user_id, checkout_session_id, state, payment_intent_id, amount_total, currency)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		`INSERT INTO order_payments (`+orderPaymentColumns+`)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING id`,
-		data.OrderId, data.UserId, data.CheckoutSessionId, data.State, data.PaymentIntentId, data.AmountTotal, data.Currency,
+		data.OrderId, data.UserId, data.State, data.AmountTotal, data.Currency,
+		data.PaymentInfo.StripeUserId, data.PaymentInfo.PaymentIntentId, data.PaymentInfo.CheckoutSessionId,
 	).Scan(&id)
 	if err != nil {
 		return 0, err
@@ -36,9 +40,11 @@ func (p pgPaymentRepo) CreateOrderPayment(data model.OrderPayment, ctx context.C
 
 func (p pgPaymentRepo) UpdateOrderPayment(data model.OrderPayment, ctx context.Context) error {
 	result, err := p.DB.Exec(ctx,
-		`UPDATE order_payments SET checkout_session_id = $2, state = $3, payment_intent_id = $4, updated_at = NOW()
+		`UPDATE order_payments SET state = $2, stripe_user_id = $3, payment_intent_id = $4,
+		checkout_session_id = $5, updated_at = NOW()
 		WHERE order_id = $1`,
-		data.OrderId, data.CheckoutSessionId, data.State, data.PaymentIntentId)
+		data.OrderId, data.State,
+		data.PaymentInfo.StripeUserId, data.PaymentInfo.PaymentIntentId, data.PaymentInfo.CheckoutSessionId)
 	if err != nil {
 		return err
 	}
@@ -50,9 +56,8 @@ func (p pgPaymentRepo) UpdateOrderPayment(data model.OrderPayment, ctx context.C
 
 func (p pgPaymentRepo) GetOrderPayment(orderId int, ctx context.Context) (data model.OrderPayment, err error) {
 	err = p.DB.QueryRow(ctx,
-		`SELECT order_id, user_id, checkout_session_id, state, payment_intent_id, amount_total, currency
-		FROM order_payments WHERE order_id = $1`, orderId,
-	).Scan(&data.OrderId, &data.UserId, &data.CheckoutSessionId, &data.State,
-		&data.PaymentIntentId, &data.AmountTotal, &data.Currency)
+		`SELECT `+orderPaymentColumns+` FROM order_payments WHERE order_id = $1`, orderId,
+	).Scan(&data.OrderId, &data.UserId, &data.State, &data.AmountTotal, &data.Currency,
+		&data.PaymentInfo.StripeUserId, &data.PaymentInfo.PaymentIntentId, &data.PaymentInfo.CheckoutSessionId)
 	return data, err
 }

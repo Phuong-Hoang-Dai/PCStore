@@ -1,6 +1,7 @@
 package service_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/Phuong-Hoang-Dai/DDStore/app/user_service/internal/model"
@@ -34,9 +35,9 @@ func TestLogin(t *testing.T) {
 	mock.Init()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			test.uD.Id, err = service.CreateUser(test.uCD, mock)
+			test.uD.Id, err = service.CreateUser(test.uCD, mock, context.Background())
 			assert.NoError(t, err)
-			_, err := service.VerifyPassword(test.uD, mock)
+			_, err := service.VerifyPassword(test.uD, mock, context.Background())
 			if test.wantErr {
 				assert.ErrorIs(t, err, model.ErrUserNameOrPasswordIncorrect)
 

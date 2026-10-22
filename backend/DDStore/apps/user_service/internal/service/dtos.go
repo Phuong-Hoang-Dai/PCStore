@@ -4,37 +4,36 @@ import (
 	"time"
 
 	"github.com/Phuong-Hoang-Dai/DDStore/app/user_service/internal/model"
-	"gorm.io/gorm"
 )
 
 type UserDTO struct {
-	Id       int    `json:"id" gorm:"column:id"`
-	Name     string `json:"name" gorm:"column:name"`
-	Email    string `json:"email" gorm:"column:email"`
+	Id       int    `json:"id"`
+	Name     string `json:"name"`
+	Email    string `json:"email"`
 	Password string `json:"password"`
-	Role     string `json:"role" gorm:"column:role"`
+	Role     string `json:"role"`
 }
 
 type UserResponeDTO struct {
-	Id        int            `json:"id" gorm:"column:id"`
-	Name      string         `json:"name" gorm:"column:name"`
-	Email     string         `json:"email" gorm:"column:email"`
-	CreatedAt time.Time      `json:"create_at"`
-	UpdatedAt time.Time      `json:"update_at"`
-	DeletedAt gorm.DeletedAt `json:"delete_at" gorm:"index"`
-	Role      string         `json:"roleId" gorm:"column:roleId"`
+	Id        int       `json:"id"`
+	Name      string    `json:"name"`
+	Email     string    `json:"email"`
+	CreatedAt time.Time `json:"create_at"`
+	UpdatedAt time.Time `json:"update_at"`
+	DeletedAt time.Time `json:"delete_at"`
+	Role      string    `json:"roleId"`
 }
 
 type UserCreateDTO struct {
-	Name     string `json:"name" gorm:"column:name"`
-	Email    string `json:"email" gorm:"column:email"`
+	Name     string `json:"name"`
+	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 
 type UserUpdateDTO struct {
-	Id    int    `json:"id" gorm:"column:id"`
-	Name  string `json:"name" gorm:"column:name"`
-	Email string `json:"email" gorm:"column:email"`
+	Id    int    `json:"id"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
 }
 
 func MapUserCreateDTOtoUser(uD UserCreateDTO, u *model.User) {

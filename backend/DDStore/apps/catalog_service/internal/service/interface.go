@@ -13,6 +13,7 @@ type ProductRepos interface {
 	UpdateProducts(ctx context.Context, data []model.Product) error
 	IsProductExist(ctx context.Context, id bson.ObjectID) (bool, error)
 	GetProductById(ctx context.Context, id bson.ObjectID) (model.Product, error)
+	GetProductsByIds(ctx context.Context, ids []bson.ObjectID) ([]model.Product, error)
 	GetProducts(ctx context.Context, p model.Paging) ([]model.Product, error)
 	GetProductsByCate(ctx context.Context, p model.Paging, cate model.Category) ([]model.Product, error)
 	DeleteProduct(ctx context.Context, id bson.ObjectID) error
@@ -32,5 +33,6 @@ type ProductService interface {
 	GetProducts(ctx context.Context, p *model.Paging) ([]model.Product, error)
 	GetProductsByCate(ctx context.Context, p *model.Paging, cate model.Category) ([]model.Product, error)
 	GetProductById(ctx context.Context, id bson.ObjectID) (model.Product, error)
+	GetProductsByIds(ctx context.Context, ids []bson.ObjectID) ([]model.Product, error)
 	DeleteProduct(ctx context.Context, id bson.ObjectID) error
 }

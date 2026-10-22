@@ -1,16 +1,22 @@
 package db
 
 import (
-	"errors"
+	"context"
 	"log"
 
 	"github.com/Phuong-Hoang-Dai/DDStore/app/user_service/internal/model"
-	"gorm.io/gorm"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func SeedData(db *gorm.DB) error {
-	p := model.User{}
-	if !errors.Is(db.First(&p).Error, gorm.ErrRecordNotFound) {
+func SeedData(db *pgxpool.Pool) error {
+	ctx := context.Background()
+
+	var seeded bool
+	if err := db.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM users)`).Scan(&seeded); err != nil {
+		return err
+	}
+	if seeded {
 		log.Println("Data is seeded")
 		return nil
 	}
@@ -26,9 +32,12 @@ func SeedData(db *gorm.DB) error {
 		user[i].SetHashPassword([]byte(pw[i]))
 	}
 
-	if err := db.Create(&user).Error; err != nil {
-		return err
-	}
-
-	return nil
+	_, err := db.CopyFrom(ctx,
+		pgx.Identifier{"users"},
+		[]string{"name", "email", "password", "role"},
+		pgx.CopyFromSlice(len(user), func(i int) ([]any, error) {
+			return []any{user[i].Name, user[i].Email, user[i].HashedPassword, user[i].Role}, nil
+		}),
+	)
+	return err
 }

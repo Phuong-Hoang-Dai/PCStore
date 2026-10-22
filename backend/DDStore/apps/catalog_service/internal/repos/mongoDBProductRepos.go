@@ -43,6 +43,17 @@ func (m mognoProductRepo) GetProductById(ctx context.Context, id bson.ObjectID) 
 	return data, err
 }
 
+func (m mognoProductRepo) GetProductsByIds(ctx context.Context, ids []bson.ObjectID) ([]model.Product, error) {
+	filter := bson.M{"_id": bson.M{"$in": ids}, "deleted_at": nil}
+	cursor, err := m.col.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	var data []model.Product
+	err = cursor.All(ctx, &data)
+	return data, err
+}
+
 func (m mognoProductRepo) UpdateProduct(ctx context.Context, data model.Product) error {
 	filter := bson.M{"_id": data.Id, "deleted_at": nil}
 	update := bson.M{"$set": bson.M{

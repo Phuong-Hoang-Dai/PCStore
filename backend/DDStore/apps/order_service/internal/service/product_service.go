@@ -7,6 +7,7 @@ import (
 )
 
 type ProductService interface {
-	GetPriceProduct(items *[]OrderDTO) error
+	GetProductsByIds(ids []string, ctx context.Context) ([]catalog.Product, error)
 	UpdateProductState(productId string, state catalog.ProductState, ctx context.Context) (err error)
+	GetPriceProduct(items *[]OrderDTO) error
 }

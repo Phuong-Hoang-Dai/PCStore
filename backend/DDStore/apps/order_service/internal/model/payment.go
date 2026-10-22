@@ -1,13 +1,18 @@
 package model
 
 type OrderPayment struct {
-	OrderId           int
-	UserId            int
-	CheckoutSessionId string
-	State             PaymentState
+	OrderId     int
+	UserId      int
+	State       *PaymentState
+	AmountTotal *int
+	Currency    *string
+	PaymentInfo *Payment
+}
+
+type Payment struct {
+	StripeUserId      string
 	PaymentIntentId   int
-	AmountTotal       int
-	Currency          string
+	CheckoutSessionId string
 }
 
 type PaymentState int

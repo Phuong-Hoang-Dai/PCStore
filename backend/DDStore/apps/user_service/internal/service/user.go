@@ -1,23 +1,27 @@
 package service
 
-import "github.com/Phuong-Hoang-Dai/DDStore/app/user_service/internal/model"
+import (
+	"context"
 
-func CreateUser(uD UserCreateDTO, repos UserRepos) (int, error) {
+	"github.com/Phuong-Hoang-Dai/DDStore/app/user_service/internal/model"
+)
+
+func CreateUser(uD UserCreateDTO, repos UserRepos, ctx context.Context) (int, error) {
 	var u model.User
 	MapUserCreateDTOtoUser(uD, &u)
 	u.Role = "user"
 
-	if id, err := repos.CreateUser(&u); err != nil {
-		return 0, nil
+	if id, err := repos.CreateUser(&u, ctx); err != nil {
+		return 0, err
 	} else {
-		return id, err
+		return id, nil
 	}
 }
 
-func GetUserById(id int, repos UserRepos) (u UserResponeDTO, err error) {
+func GetUserById(id int, repos UserRepos, ctx context.Context) (u UserResponeDTO, err error) {
 	var userDAO model.User
 
-	if err := repos.GetUserById(id, &userDAO); err != nil {
+	if err := repos.GetUserById(id, &userDAO, ctx); err != nil {
 		return u, err
 	} else {
 		MapUsertoUserResponeDTO(userDAO, &u)
@@ -25,29 +29,29 @@ func GetUserById(id int, repos UserRepos) (u UserResponeDTO, err error) {
 	}
 }
 
-func UpdateUser(uD UserUpdateDTO, repos UserRepos) error {
+func UpdateUser(uD UserUpdateDTO, repos UserRepos, ctx context.Context) error {
 	var u model.User
 	MapUserUpdateDTOtoUser(uD, &u)
 
-	if err := repos.UpdateUser(u); err != nil {
-		return nil
-	} else {
-		return err
-	}
-}
-
-func DeleteUser(id int, repos UserRepos) error {
-	if err := repos.DeleteUser(id); err != nil {
+	if err := repos.UpdateUser(u, ctx); err != nil {
 		return err
 	} else {
 		return nil
 	}
 }
 
-func GetUsers(p *model.Paging, repos UserRepos) ([]UserResponeDTO, error) {
+func DeleteUser(id int, repos UserRepos, ctx context.Context) error {
+	if err := repos.DeleteUser(id, ctx); err != nil {
+		return err
+	} else {
+		return nil
+	}
+}
+
+func GetUsers(p *model.Paging, repos UserRepos, ctx context.Context) ([]UserResponeDTO, error) {
 	p.Process()
 	var userDAO []model.User
-	if err := repos.GetUsers(*p, &userDAO); err != nil {
+	if err := repos.GetUsers(*p, &userDAO, ctx); err != nil {
 		return nil, err
 	}
 	data := make([]UserResponeDTO, len(userDAO), cap(userDAO))
@@ -58,9 +62,9 @@ func GetUsers(p *model.Paging, repos UserRepos) ([]UserResponeDTO, error) {
 	return data, nil
 }
 
-func VerifyPassword(data UserDTO, repos UserRepos) (UserDTO, error) {
+func VerifyPassword(data UserDTO, repos UserRepos, ctx context.Context) (UserDTO, error) {
 	userDao := model.User{}
-	if err := repos.GetUserByName(data.Name, &userDao); err != nil {
+	if err := repos.GetUserByName(data.Name, &userDao, ctx); err != nil {
 		return UserDTO{}, err
 	}
 

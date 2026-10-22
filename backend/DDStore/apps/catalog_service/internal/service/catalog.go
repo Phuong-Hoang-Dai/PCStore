@@ -126,6 +126,10 @@ func (service productManager) DeleteProduct(ctx context.Context, id bson.ObjectI
 	return service.repository.DeleteProduct(ctx, id)
 }
 
+func (service productManager) GetProductsByIds(ctx context.Context, ids []bson.ObjectID) ([]model.Product, error) {
+	return service.repository.GetProductsByIds(ctx, ids)
+}
+
 func validateProduct(ctx context.Context, product model.Product, repo ProductRepos) (bool, error) {
 	errList := ""
 	if product.Type == model.ProductTypeComposite {

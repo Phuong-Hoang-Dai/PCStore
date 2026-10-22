@@ -8,9 +8,11 @@ import (
 )
 
 func SetupHttp(db *pgxpool.Pool) {
-	baseUrl := "http://product_service:8888"
+	productBaseUrl := "http://product_service:8888"
+	userBaseUrl := "http://user_service:6666"
 
-	orderService := Init(db, baseUrl)
+	orderService := Init(db, productBaseUrl)
+	paymentService := InitPayment(db, userBaseUrl, productBaseUrl)
 
 	r := gin.Default()
 
@@ -28,6 +30,12 @@ func SetupHttp(db *pgxpool.Pool) {
 				"message": "order service is healthy",
 			})
 		})
+	}
+
+	payment := r.Group("/payment")
+	{
+		payment.POST("/:id", paymentService.CreatePaymentInfo())
+		payment.POST("/checkout/:id", paymentService.CreateCheckoutSession())
 	}
 
 	r.Run(":7777")

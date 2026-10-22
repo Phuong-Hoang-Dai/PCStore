@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -8,16 +9,17 @@ import (
 	"github.com/Phuong-Hoang-Dai/DDStore/app/user_service/internal/repos"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/user_service/internal/service"
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type UserService struct {
 	userRepos service.UserRepos
 }
 
-func Init(db *gorm.DB) UserService {
+func Init(db *pgxpool.Pool) UserService {
 	return UserService{
-		userRepos: repos.NewMysqlUserRepo(db),
+		userRepos: repos.NewPgUserRepo(db),
 	}
 }
 
@@ -30,7 +32,7 @@ func (u UserService) CreateUser() func(ctx *gin.Context) {
 			return
 		}
 
-		id, err := service.CreateUser(data, u.userRepos)
+		id, err := service.CreateUser(data, u.userRepos, ctx)
 		if err != nil {
 			responeError(http.StatusInternalServerError, err, ctx)
 			return
@@ -55,8 +57,8 @@ func (u UserService) GetUserById() func(ctx *gin.Context) {
 		}
 
 		var data service.UserResponeDTO
-		data, err = service.GetUserById(id, u.userRepos)
-		if err == gorm.ErrRecordNotFound {
+		data, err = service.GetUserById(id, u.userRepos, ctx)
+		if errors.Is(err, pgx.ErrNoRows) {
 			responeError(http.StatusNotFound, err, ctx)
 			return
 		}
@@ -88,8 +90,8 @@ func (u UserService) UpdateUser() func(ctx *gin.Context) {
 		}
 
 		data.Id = id
-		if err := service.UpdateUser(data, u.userRepos); err != nil {
-			if err == gorm.ErrRecordNotFound {
+		if err := service.UpdateUser(data, u.userRepos, ctx); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
 				responeError(http.StatusNotFound, err, ctx)
 			} else {
 				responeError(http.StatusInternalServerError, err, ctx)
@@ -113,8 +115,8 @@ func (u UserService) DeleteUser() func(ctx *gin.Context) {
 			return
 		}
 
-		if err := service.DeleteUser(id, u.userRepos); err != nil {
-			if err == gorm.ErrRecordNotFound {
+		if err := service.DeleteUser(id, u.userRepos, ctx); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
 				responeError(http.StatusNotFound, err, ctx)
 			} else {
 				responeError(http.StatusInternalServerError, err, ctx)
@@ -150,7 +152,7 @@ func (u UserService) GetUsers() func(ctx *gin.Context) {
 
 		var data []service.UserResponeDTO
 
-		if data, err = service.GetUsers(&p, u.userRepos); err != nil {
+		if data, err = service.GetUsers(&p, u.userRepos, ctx); err != nil {
 			responeError(http.StatusInternalServerError, err, ctx)
 			return
 		}
@@ -175,7 +177,7 @@ func (u UserService) VerifyPassword() func(ctx *gin.Context) {
 			responeError(http.StatusBadRequest, err, ctx)
 			return
 		}
-		if user, err := service.VerifyPassword(data, u.userRepos); err != nil {
+		if user, err := service.VerifyPassword(data, u.userRepos, ctx); err != nil {
 			responeError(http.StatusBadRequest, err, ctx)
 			return
 		} else {

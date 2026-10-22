@@ -1,12 +1,11 @@
 package handler
 
 import (
-	"gorm.io/gorm"
-
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func SetupHttp(db *gorm.DB) {
+func SetupHttp(db *pgxpool.Pool) {
 	userService := Init(db)
 
 	r := gin.Default()

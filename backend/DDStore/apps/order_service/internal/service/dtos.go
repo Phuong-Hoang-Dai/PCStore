@@ -13,6 +13,13 @@ type OrderResponeDTO struct {
 	Price float64 `json:"price"`
 }
 
+type UserDTO struct {
+	Id    int    `json:"id"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
+	Role  string `json:"roleId"`
+}
+
 func MapOrderResponeDTOtoOrderDTO(oR OrderResponeDTO, o *OrderDTO) {
 	o.Price = oR.Price
 }

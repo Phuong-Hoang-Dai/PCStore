@@ -13,7 +13,7 @@ type Product struct {
 	Desc      string                  `bson:"description"   json:"description"`
 	Brand     string                  `bson:"brand"         json:"brand"`
 	Cate      Category                `bson:"cate"          json:"cate"`
-	Price     float64                 `bson:"price"         json:"price"`
+	Price     int                     `bson:"price"         json:"price"`
 	Type      string                  `bson:"type"          json:"type"`
 	Images    []Media                 `bson:"images"        json:"images"`
 	Option    map[string][]Commponent `bson:"upgrade"       json:"upgrade"`

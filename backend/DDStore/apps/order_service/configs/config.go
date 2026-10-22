@@ -7,8 +7,11 @@ import (
 )
 
 type Config struct {
-	AppName    string
-	ConnectStr string
+	AppName         string
+	ConnectStr      string
+	StripeSecretKey  string
+	StripeSuccessURL string
+	StripeCancelURL  string
 }
 
 var Cfg Config
@@ -16,7 +19,10 @@ var Cfg Config
 func LoadConfig() {
 	godotenv.Load("./configs/.env")
 	Cfg = Config{
-		AppName:    os.Getenv("APP_NAME"),
-		ConnectStr: os.Getenv("DB_CONN_STR"),
+		AppName:          os.Getenv("APP_NAME"),
+		ConnectStr:       os.Getenv("DB_CONN_STR"),
+		StripeSecretKey:  os.Getenv("STRIPE_SECRET_KEY"),
+		StripeSuccessURL: os.Getenv("STRIPE_SUCCESS_URL"),
+		StripeCancelURL:  os.Getenv("STRIPE_CANCEL_URL"),
 	}
 }
