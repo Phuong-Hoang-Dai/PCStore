@@ -11,6 +11,9 @@ import (
 )
 
 func TestJwt(t *testing.T) {
+	configs.Cfg.JWTSecret = "test-secret"
+	configs.Cfg.AccessTokenExpireIn = "1h"
+
 	tests := []struct {
 		uR model.UseResp
 	}{

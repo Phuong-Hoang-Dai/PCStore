@@ -1,5 +1,6 @@
 import type { Product } from "./product_model";
 import UpdateQuantityOrder from "./UpdateQuantityOrder";
+import { formatVND } from "../../utils/format";
 
 const ProductItem = ({ product }: { product: Product }) => {
   return (
@@ -8,13 +9,15 @@ const ProductItem = ({ product }: { product: Product }) => {
       className="pb-5 gap-5 flex flex-col overflow-hidden px-1 w-full rounded-2xl shadow-lg bg-white"
     >
       <img
-        src="https://cdn.hstatic.net/products/1000288298/11498_dsc05320_47c7abb602c949308c1f2bc50c3af657_master.jpg"
+        src={product.image}
         alt={product.name}
-        className="rounded-t-2xl-2xl i w-full h-auto"
+        className="rounded-t-2xl w-full aspect-square object-cover"
       />
       <div className="px-3 flex flex-col gap-2 text-sm">
         <h2 className="font-medium uppercase truncate">{product.name}</h2>
-        <span className="text-red-600 font-medium">{product.price}đ</span>
+        <span className="text-red-600 font-medium">
+          {formatVND(product.price)}
+        </span>
         <UpdateQuantityOrder product={product} />
       </div>
     </div>

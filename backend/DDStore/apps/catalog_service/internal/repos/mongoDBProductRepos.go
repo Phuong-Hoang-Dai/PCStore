@@ -133,8 +133,32 @@ func (m mognoProductRepo) GetProducts(ctx context.Context, p model.Paging) ([]mo
 	return data, err
 }
 
-func (m mognoProductRepo) GetProductsByCate(ctx context.Context, p model.Paging, cate model.Category) ([]model.Product, error) {
-	filter := bson.M{"cate.id": cate.Id, "deleted_at": nil}
+func (m mognoProductRepo) UpdateProductState(ctx context.Context, id bson.ObjectID, state model.ProductState) error {
+	filter := bson.M{"_id": id, "deleted_at": nil}
+	update := bson.M{"$set": bson.M{"state": state, "updated_at": time.Now()}}
+	result, err := m.col.UpdateOne(ctx, filter, update)
+	if err != nil {
+		return err
+	}
+	if result.MatchedCount == 0 {
+		return model.ErrNotFound
+	}
+	return nil
+}
+
+func (m mognoProductRepo) RenameCategory(ctx context.Context, cate model.ProductCategory) error {
+	_, err := m.col.UpdateMany(ctx,
+		bson.M{"cate.id": cate.Id},
+		bson.M{"$set": bson.M{"cate.name": cate.Name, "updated_at": time.Now()}})
+	return err
+}
+
+func (m mognoProductRepo) CountProductsByCate(ctx context.Context, cateId int) (int64, error) {
+	return m.col.CountDocuments(ctx, bson.M{"cate.id": cateId, "deleted_at": nil})
+}
+
+func (m mognoProductRepo) GetProductsByCate(ctx context.Context, p model.Paging, cateId int) ([]model.Product, error) {
+	filter := bson.M{"cate.id": cateId, "deleted_at": nil}
 	opts := options.Find().SetSkip(int64(p.Offset)).SetLimit(int64(p.Limit))
 	cursor, err := m.col.Find(ctx, filter, opts)
 	if err != nil {

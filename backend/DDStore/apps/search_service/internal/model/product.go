@@ -10,6 +10,7 @@ type Product struct {
 	Cate      Category  `json:"cate"`
 	Price     float32   `json:"price"`
 	Type      string    `json:"type"`
+	State     int       `json:"state"` // 0 available, 1 out of stock (catalog's ProductState)
 	Images    []Media   `json:"images"`
 	Upgrade   any       `json:"upgrade,omitempty"`
 	CreatedAt time.Time `json:"created_at"`

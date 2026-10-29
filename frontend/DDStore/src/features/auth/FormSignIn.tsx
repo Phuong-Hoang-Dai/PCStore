@@ -5,7 +5,13 @@ import { SignIn, TryGetUserByCookie } from "./user_service";
 import { useDispatch } from "react-redux";
 import { SetUser } from "./userReducer";
 
-const FormSignIn = ({ IsForUser: IsForUse }: { IsForUser: boolean }) => {
+const FormSignIn = ({
+  IsForUser: IsForUse,
+  onSwitch,
+}: {
+  IsForUser: boolean;
+  onSwitch?: () => void;
+}) => {
   const dispatch = useDispatch();
   const [form, setForm] = useState({
     name: "",
@@ -49,7 +55,7 @@ const FormSignIn = ({ IsForUser: IsForUse }: { IsForUser: boolean }) => {
     <div className="mb-4" key={key}>
       <label className="block mb-1 font-medium">{labels[i]}</label>
       <input
-        type="text"
+        type={/pass/i.test(key) ? "password" : "text"}
         name={key}
         required
         onChange={(e) => handleChange(e, key)}
@@ -95,6 +101,18 @@ const FormSignIn = ({ IsForUser: IsForUse }: { IsForUser: boolean }) => {
           </span>
           <span className="absolute top-0 bottom-0 left-0 w-0 bg-[#06923E] group-hover:w-full transition-all duration-200 -z-50" />
         </button>
+        {onSwitch && (
+          <p className="text-sm text-center mt-4 text-gray-600">
+            Chưa có tài khoản?{" "}
+            <button
+              type="button"
+              onClick={onSwitch}
+              className="text-[#FF7601] font-medium cursor-pointer hover:underline"
+            >
+              Đăng ký
+            </button>
+          </p>
+        )}
       </form>
     </div>
   );

@@ -11,7 +11,7 @@ type OrderPayment struct {
 
 type Payment struct {
 	StripeUserId      string
-	PaymentIntentId   int
+	PaymentIntentId   string
 	CheckoutSessionId string
 }
 

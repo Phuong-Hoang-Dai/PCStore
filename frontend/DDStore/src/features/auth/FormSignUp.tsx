@@ -6,7 +6,7 @@ import { useDispatch } from "react-redux";
 import type { UserLogin } from "./user_model";
 import { SetUser } from "./userReducer";
 
-const FormSignUp = () => {
+const FormSignUp = ({ onSwitch }: { onSwitch?: () => void }) => {
   const dispatch = useDispatch();
   const [form, setForm] = useState({
     id: 0,
@@ -16,10 +16,16 @@ const FormSignUp = () => {
     confirmPass: "",
   });
   const [isPending, setIsPending] = useState(false);
+  const [error, setError] = useState("");
   const labels = ["Họ tên", "Email", "Mật khẩu", "Nhập lại mật khẩu"];
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (form.password !== form.confirmPass) {
+      setError("Mật khẩu nhập lại không khớp");
+      return;
+    }
+    setError("");
     setIsPending(true);
     const user: UserLogin = {
       id: form.id,
@@ -35,7 +41,10 @@ const FormSignUp = () => {
       })
       .then(() => TryGetUserByCookie())
       .then((data) => dispatch(SetUser(data)))
-      .catch();
+      .catch(() => {
+        setIsPending(false);
+        setError("Đăng ký không thành công, vui lòng thử lại");
+      });
   };
 
   const handleChange = (
@@ -52,7 +61,7 @@ const FormSignUp = () => {
     <div className="mb-4" key={key}>
       <label className="block mb-1 font-medium">{labels[i]}</label>
       <input
-        type="text"
+        type={/pass/i.test(key) ? "password" : "text"}
         name={key}
         required
         onChange={(e) => handleChange(e, key)}
@@ -73,6 +82,7 @@ const FormSignUp = () => {
           Đăng ký tài khoản
         </h2>
         {renderForm}
+        {error && <p className="text-red-500 text-sm my-2">{error}</p>}
         <button
           type="submit"
           disabled={isPending}
@@ -88,6 +98,18 @@ const FormSignUp = () => {
 
           <span className="absolute top-0 bottom-0 left-0 w-0 bg-[#06923E] group-hover:w-full transition-all duration-200 -z-50" />
         </button>
+        {onSwitch && (
+          <p className="text-sm text-center mt-4 text-gray-600">
+            Đã có tài khoản?{" "}
+            <button
+              type="button"
+              onClick={onSwitch}
+              className="text-[#FF7601] font-medium cursor-pointer hover:underline"
+            >
+              Đăng nhập
+            </button>
+          </p>
+        )}
       </form>
     </div>
   );

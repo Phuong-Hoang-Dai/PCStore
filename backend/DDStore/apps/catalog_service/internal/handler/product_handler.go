@@ -5,24 +5,18 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/Phuong-Hoang-Dai/DDStore/app/product_service/configs"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/product_service/internal/model"
-	"github.com/Phuong-Hoang-Dai/DDStore/app/product_service/internal/repos"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/product_service/internal/service"
 	"github.com/gin-gonic/gin"
-	"github.com/redis/go-redis/v9"
 	"go.mongodb.org/mongo-driver/v2/bson"
-	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
 type ProductHandler struct {
 	productService service.ProductService
 }
 
-func NewProductHandler(db *mongo.Client, redis *redis.Client) ProductHandler {
-	col := db.Database(configs.Cfg.DBName).Collection("products")
-	repo := repos.NewMongoProductRepo(col)
-	return ProductHandler{productService: service.NewProductService(repo, redis)}
+func NewProductHandler(productService service.ProductService) ProductHandler {
+	return ProductHandler{productService: productService}
 }
 
 func (p ProductHandler) CreateProduct() gin.HandlerFunc {
@@ -36,7 +30,7 @@ func (p ProductHandler) CreateProduct() gin.HandlerFunc {
 
 		id, err := p.productService.CreateProduct(c.Request.Context(), data)
 		if err != nil {
-			responeError(http.StatusInternalServerError, err, c)
+			responeProductError(err, c)
 			return
 		}
 
@@ -150,11 +144,7 @@ func (p ProductHandler) UpdateProduct() gin.HandlerFunc {
 		data.Id = id
 
 		if err := p.productService.UpdateProduct(c.Request.Context(), data); err != nil {
-			if errors.Is(err, model.ErrNotFound) {
-				responeError(http.StatusNotFound, err, c)
-			} else {
-				responeError(http.StatusInternalServerError, err, c)
-			}
+			responeProductError(err, c)
 			return
 		}
 
@@ -162,6 +152,36 @@ func (p ProductHandler) UpdateProduct() gin.HandlerFunc {
 			"success": true,
 			"message": "Update Product succesfully",
 			"data":    data,
+		})
+	}
+}
+
+// UpdateProductState is called by order_service when a product runs out of / gets back in stock.
+func (p ProductHandler) UpdateProductState() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, err := bson.ObjectIDFromHex(c.Param("id"))
+		if err != nil {
+			responeError(http.StatusBadRequest, err, c)
+			return
+		}
+
+		var body struct {
+			State *model.ProductState `json:"state" binding:"required"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil {
+			responeError(http.StatusBadRequest, err, c)
+			return
+		}
+
+		if err := p.productService.UpdateProductState(c.Request.Context(), id, *body.State); err != nil {
+			responeProductError(err, c)
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": "Update Product State succesfully",
+			"data":    gin.H{"id": id.Hex(), "state": *body.State},
 		})
 	}
 }
@@ -246,8 +266,7 @@ func (p ProductHandler) GetProductsByCate() gin.HandlerFunc {
 			return
 		}
 
-		cate := model.Category{Id: cateID}
-		data, err := p.productService.GetProductsByCate(c.Request.Context(), &paging, cate)
+		data, err := p.productService.GetProductsByCate(c.Request.Context(), &paging, cateID)
 		if err != nil {
 			responeError(http.StatusInternalServerError, err, c)
 			return
@@ -263,6 +282,17 @@ func (p ProductHandler) GetProductsByCate() gin.HandlerFunc {
 				"total":  len(data),
 			},
 		})
+	}
+}
+
+func responeProductError(err error, c *gin.Context) {
+	switch {
+	case errors.Is(err, model.ErrNotFound):
+		responeError(http.StatusNotFound, err, c)
+	case errors.Is(err, model.ErrProductIsInvalid), errors.Is(err, model.ErrInvalidState):
+		responeError(http.StatusBadRequest, err, c)
+	default:
+		responeError(http.StatusInternalServerError, err, c)
 	}
 }
 

@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"log"
+	"time"
 
 	"github.com/Phuong-Hoang-Dai/DDStore/app/order_service/internal/model"
 )
@@ -47,15 +49,19 @@ func (svc OrderService) CreateOrder(userId int, items []OrderDTO, ctx context.Co
 		return 0, err
 	}
 
-	for _, v := range itemDAO {
-		err = svc.stockService.ReserveStock(v.OrderId, v.ProductId, v.Quantity, ctx)
+	for i := range order.Items {
+		order.Items[i].OrderId = order.Id
+		err = svc.stockService.ReserveStock(order.Id, order.Items[i].ProductId, order.Items[i].Quantity, ctx)
 		if err != nil {
+			// Give back what earlier items already reserved.
+			svc.stockService.ReleaseStock(order.Id, ctx)
 			return 0, err
 		}
 	}
 
 	id, err := svc.repos.CreateOrder(&order, ctx)
 	if err != nil {
+		svc.stockService.ReleaseStock(order.Id, ctx)
 		return 0, err
 	}
 
@@ -66,6 +72,7 @@ func (svc OrderService) CreateOrder(userId int, items []OrderDTO, ctx context.Co
 	return id, nil
 }
 
+// CancelOrder cancels an unpaid order and gives its stock back.
 func (svc OrderService) CancelOrder(id int, ctx context.Context) (err error) {
 	data, err := svc.repos.GetOrderById(id, ctx)
 	if err != nil {
@@ -74,17 +81,45 @@ func (svc OrderService) CancelOrder(id int, ctx context.Context) (err error) {
 	if data.State == model.Cancelled {
 		return model.ErrOrderIsCanceled
 	}
-	itemDTO := make([]OrderDTO, len(data.Items), cap(data.Items))
-	for i := range data.Items {
-		MapOrderItemtoOrderDTO(data.Items[i], &itemDTO[i])
-	}
-	//Restore stock
 
-	if err := svc.repos.DeleteOrder(id, ctx); err != nil {
+	restocked, err := svc.repos.CancelOrder(id, ctx)
+	if err != nil {
 		return err
 	}
-
+	svc.stockService.MarkAvailable(restocked, ctx)
 	return nil
+}
+
+// CancelExpiredOrders cancels the orders left unpaid for OrderPaymentTimeout and
+// releases their stock. It returns how many orders were cancelled.
+func (svc OrderService) CancelExpiredOrders(ctx context.Context) (int, error) {
+	ids, restocked, err := svc.repos.CancelExpiredOrders(time.Now().Add(-model.OrderPaymentTimeout), ctx)
+	if err != nil {
+		return 0, err
+	}
+	svc.stockService.MarkAvailable(restocked, ctx)
+	return len(ids), nil
+}
+
+// RunExpiredOrderCanceller runs CancelExpiredOrders every interval until ctx is done.
+// It is safe to run in several replicas: each order is cancelled by one UPDATE only.
+func (svc OrderService) RunExpiredOrderCanceller(ctx context.Context, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		if n, err := svc.CancelExpiredOrders(ctx); err != nil {
+			log.Printf("Failed to cancel expired orders: %v", err)
+		} else if n > 0 {
+			log.Printf("Cancelled %d order(s) unpaid after %s", n, model.OrderPaymentTimeout)
+		}
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
 }
 
 func (svc OrderService) GetOrders(p *model.Paging, ctx context.Context) (data []model.Order, err error) {

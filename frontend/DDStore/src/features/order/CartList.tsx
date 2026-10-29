@@ -1,24 +1,65 @@
+import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { changeByAmout, decrement, increment, selectCart } from "./cartSlice";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Mousewheel, Scrollbar } from "swiper/modules";
 import { IoChevronDownSharp, IoChevronUpSharp } from "react-icons/io5";
 import { IoMdClose } from "react-icons/io";
+import { AiOutlineLoading3Quarters } from "react-icons/ai";
+import { selectUser } from "../auth/userReducer";
+import { createCheckoutSession, createOrder } from "./order_service";
+import { formatVND } from "../../utils/format";
 
 const CartList = () => {
   const cartItem = useSelector(selectCart);
+  const user = useSelector(selectUser);
   const dispatch = useDispatch();
+  const [isPending, setIsPending] = useState(false);
+  const [error, setError] = useState("");
+
+  const isLoggedIn = user.id !== 0;
+  const isEmpty = cartItem.order.length === 0;
+
+  const handleCheckout = () => {
+    if (isPending || isEmpty) {
+      return;
+    }
+    if (!isLoggedIn) {
+      setError("Vui lòng đăng nhập để đặt hàng");
+      return;
+    }
+
+    setIsPending(true);
+    setError("");
+    createOrder(
+      cartItem.order.map((item) => ({
+        productId: item.id,
+        quantity: item.quantityOrder,
+      }))
+    )
+      .then((orderId) => createCheckoutSession(orderId))
+      .then((url) => {
+        // The cart is cleared on the success page, so it survives a cancelled payment.
+        window.location.assign(url);
+      })
+      .catch((err: Error) => {
+        setIsPending(false);
+        setError(err.message || "Không thể tạo đơn hàng, vui lòng thử lại");
+      });
+  };
+
   const renderItems = cartItem.order.map((item) => (
-    <SwiperSlide className="h-30">
+    <SwiperSlide className="h-30" key={item.id}>
       <div className="flex flex-row items-center justify-around text-sm h-30 font-medium">
         <img
-          src="https://cdn.hstatic.net/products/1000288298/11498_dsc05320_47c7abb602c949308c1f2bc50c3af657_master.jpg"
-          className="w-2/8 h-auto"
+          src={item.image}
+          alt={item.name}
+          className="w-2/8 aspect-square object-cover"
         ></img>
         <div className="w-4/8 flex flex-col justify-between h-1/2 text-start px-2">
-          <span>{item.name}</span>
-          <span className="font-light ">{item.description}</span>
-          <span className="text-end">{item.price}</span>
+          <span className="truncate">{item.name}</span>
+          <span className="font-light truncate">{item.description}</span>
+          <span className="text-end">{formatVND(item.price)}</span>
         </div>
         <span className="w-1/8 pr-3 flex flex-col items-center">
           <IoChevronUpSharp
@@ -49,7 +90,7 @@ const CartList = () => {
     return sum + item.price * item.quantityOrder;
   }, 0);
   return (
-    <div className="bg-white px-8 rounded-xl relative shadow-lg w-screen md:w-md z-0 h-145 ">
+    <div className="bg-white px-8 pb-6 rounded-xl relative shadow-lg w-screen md:w-md z-0 min-h-145 text-base">
       <span className=" w-0 h-0 border-[10px] -z-10 -top-[20px] right-2 border-b-white border-t-transparent border-x-transparent  absolute"></span>
       <span className=" w-[20px] h-0 border-b-[1px]  -z-10 border-solid top-0 right-20 border-white absolute"></span>
       <div className="flex w-full items-center justify-center pt-3">
@@ -57,24 +98,40 @@ const CartList = () => {
           Giỏ hàng
         </div>
       </div>
-      <Swiper
-        modules={[Scrollbar, Mousewheel]}
-        scrollbar={{ draggable: true }}
-        mousewheel={true}
-        direction="vertical"
-        className="h-90"
-        slidesPerView="auto"
-        spaceBetween={4}
-      >
-        {renderItems}
-      </Swiper>
+      {isEmpty ? (
+        <div className="h-90 flex items-center justify-center text-gray-500">
+          Giỏ hàng trống
+        </div>
+      ) : (
+        <Swiper
+          modules={[Scrollbar, Mousewheel]}
+          scrollbar={{ draggable: true }}
+          mousewheel={true}
+          direction="vertical"
+          className="h-90"
+          slidesPerView="auto"
+          spaceBetween={4}
+        >
+          {renderItems}
+        </Swiper>
+      )}
       <div className="w-full flex justify-between items-center text-2xl mt-3">
         <span>Tổng tiền:</span>
-        <span>{total}</span>
+        <span>{formatVND(total)}</span>
       </div>
-      <div className="w-full text-[20px] p-2 mt-9 bg-red-600 text-white rounded-4xl shadow-2xl cursor-pointer hover:bg-red-400">
-        Hoàn tất đơn hàng
-      </div>
+      {error && <p className="text-red-500 text-sm mt-3">{error}</p>}
+      <button
+        type="button"
+        onClick={handleCheckout}
+        disabled={isPending || isEmpty}
+        className="w-full h-12 text-[20px] p-2 mt-6 bg-red-600 text-white rounded-4xl shadow-2xl cursor-pointer hover:bg-red-400 disabled:bg-red-300 disabled:cursor-not-allowed flex justify-center items-center"
+      >
+        {isPending ? (
+          <AiOutlineLoading3Quarters className="animate-spin" />
+        ) : (
+          "Hoàn tất đơn hàng"
+        )}
+      </button>
     </div>
   );
 };

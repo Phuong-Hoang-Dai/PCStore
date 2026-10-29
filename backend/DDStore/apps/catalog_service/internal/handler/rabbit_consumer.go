@@ -10,11 +10,8 @@ import (
 	"github.com/Azure/go-amqp"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/product_service/configs"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/product_service/internal/model"
-	"github.com/Phuong-Hoang-Dai/DDStore/app/product_service/internal/repos"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/product_service/internal/service"
 	rmq "github.com/rabbitmq/rabbitmq-amqp-go-client/pkg/rabbitmqamqp"
-	"github.com/redis/go-redis/v9"
-	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
 type RabbitConsumerModel struct {
@@ -22,12 +19,8 @@ type RabbitConsumerModel struct {
 	conn           *rmq.AmqpConnection
 }
 
-func NewRabbitHandler(db *mongo.Client, redis *redis.Client, ctx context.Context) RabbitConsumerModel {
-	col := db.Database(configs.Cfg.DBName).Collection("products")
-	repo := repos.NewMongoProductRepo(col)
-	conn := SetupRabbitQueues(ctx)
-
-	return RabbitConsumerModel{productService: service.NewProductService(repo, redis), conn: conn}
+func NewRabbitConsumer(conn *rmq.AmqpConnection, productService service.ProductService) RabbitConsumerModel {
+	return RabbitConsumerModel{productService: productService, conn: conn}
 }
 
 func SetupRabbitQueues(ctx context.Context) *rmq.AmqpConnection {
@@ -44,6 +37,9 @@ func SetupRabbitQueues(ctx context.Context) *rmq.AmqpConnection {
 	if _, err = conn.Management().DeclareQueue(ctx, &rmq.QuorumQueueSpecification{Name: configs.Cfg.ProductEditedQueue}); err != nil {
 		log.Panicf("Failed to declare a queue: %v", err)
 	}
+	if _, err = conn.Management().DeclareQueue(ctx, &rmq.QuorumQueueSpecification{Name: configs.Cfg.ProductIndexQueue}); err != nil {
+		log.Panicf("Failed to declare a queue: %v", err)
+	}
 
 	return conn
 }
@@ -58,22 +54,23 @@ func (p RabbitConsumerModel) ProductCreatedWorker(deliveries chan rmq.IDeliveryC
 			body = msg.Data[0]
 		}
 
+		// continue, not return: returning would stop this worker for good.
 		if err := json.Unmarshal(body, &data); err != nil {
 			delivery.Discard(context.Background(), &amqp.Error{Condition: amqp.ErrCondDecodeError})
-			return
+			continue
 		}
 
 		id, err := p.productService.CreateProduct(ctx, data)
 
 		if err != nil {
 			delivery.Discard(ctx, &amqp.Error{Condition: amqp.ErrCondInternalError})
-			return
+			continue
 		}
 
+		// CreateProduct also publishes the new product for search indexing.
 		if err := delivery.Accept(ctx); err != nil {
 			log.Printf("Failed to accept message: %v", err)
 		}
-		RabbitPublisher.PublishProduct(body)
 		log.Printf("Created successfully: id = %s", id)
 	}
 }
@@ -97,6 +94,7 @@ func (p RabbitConsumerModel) CreateConsumer(queueName string, workerFunc workFor
 				return
 			}
 			log.Printf("Failed to receive a message: %v", err)
+			continue
 		}
 		deliveries <- delivery
 	}

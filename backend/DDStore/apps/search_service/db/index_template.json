@@ -59,6 +59,9 @@
             "type": {
                 "type": "keyword"
             },
+            "state": {
+                "type": "integer"
+            },
             "images": {
                 "properties": {
                     "url": {

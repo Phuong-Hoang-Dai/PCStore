@@ -23,8 +23,6 @@ type OrderItem struct {
 	CreatedAt time.Time `json:"create_at"`
 	UpdatedAt time.Time `json:"update_at"`
 	DeletedAt time.Time `json:"delete_at" `
-
-	Order Order
 }
 
 type OrderState int
@@ -32,7 +30,7 @@ type OrderState int
 const (
 	Processing OrderState = iota
 	ReadyToPay
-	Payed
+	Paid
 	Completed
 	Cancelled
 )

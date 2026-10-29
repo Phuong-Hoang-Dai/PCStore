@@ -2,6 +2,7 @@ package repos
 
 import (
 	"context"
+	"time"
 
 	"github.com/Phuong-Hoang-Dai/DDStore/app/order_service/internal/model"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/order_service/internal/service"
@@ -23,11 +24,12 @@ const orderColumns = `id, state, total, user_id, created_at, updated_at`
 
 func (m pgOrderRepo) CreateOrder(data *model.Order, ctx context.Context) (int, error) {
 	err := pgx.BeginFunc(ctx, m.DB, func(tx pgx.Tx) error {
+		// data.Id is allocated by the sequencer before stock is reserved against it.
 		err := tx.QueryRow(ctx,
-			`INSERT INTO orders (state, total, user_id) VALUES ($1, $2, $3)
-			RETURNING id, created_at, updated_at`,
-			data.State, data.Total, data.UserId,
-		).Scan(&data.Id, &data.CreatedAt, &data.UpdatedAt)
+			`INSERT INTO orders (id, state, total, user_id) VALUES ($1, $2, $3, $4)
+			RETURNING created_at, updated_at`,
+			data.Id, data.State, data.Total, data.UserId,
+		).Scan(&data.CreatedAt, &data.UpdatedAt)
 		if err != nil {
 			return err
 		}
@@ -86,23 +88,56 @@ func (m pgOrderRepo) UpdateOrder(data model.Order, ctx context.Context) error {
 	return nil
 }
 
-func (m pgOrderRepo) DeleteOrder(id int, ctx context.Context) error {
-	result, err := m.DB.Exec(ctx,
-		`UPDATE orders SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1 AND deleted_at IS NULL`, id)
-	if err != nil {
+// CancelOrder cancels an unpaid order and releases its stock in one transaction, and
+// returns the restocked product ids. The state check in the WHERE clause makes a
+// concurrent payment or cancellation win cleanly.
+func (m pgOrderRepo) CancelOrder(id int, ctx context.Context) (products []string, err error) {
+	err = pgx.BeginFunc(ctx, m.DB, func(tx pgx.Tx) error {
+		result, err := tx.Exec(ctx,
+			`UPDATE orders SET state = $2, updated_at = NOW()
+			WHERE id = $1 AND state IN ($3, $4) AND deleted_at IS NULL`,
+			id, model.Cancelled, model.Processing, model.ReadyToPay)
+		if err != nil {
+			return err
+		}
+		if result.RowsAffected() == 0 {
+			return model.ErrOrderNotCancellable
+		}
+
+		products, err = releaseReservations(ctx, tx, []int{id})
 		return err
-	}
-	if result.RowsAffected() == 0 {
-		return pgx.ErrNoRows
-	}
-	return nil
+	})
+	return products, err
+}
+
+// CancelExpiredOrders cancels every order still unpaid that was created before
+// createdBefore and releases its stock, in one transaction.
+func (m pgOrderRepo) CancelExpiredOrders(createdBefore time.Time, ctx context.Context) (ids []int, products []string, err error) {
+	err = pgx.BeginFunc(ctx, m.DB, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`UPDATE orders SET state = $1, updated_at = NOW()
+			WHERE state IN ($2, $3) AND deleted_at IS NULL AND created_at < $4
+			RETURNING id`,
+			model.Cancelled, model.Processing, model.ReadyToPay, createdBefore)
+		if err != nil {
+			return err
+		}
+		ids, err = pgx.CollectRows(rows, pgx.RowTo[int])
+		if err != nil || len(ids) == 0 {
+			return err
+		}
+
+		products, err = releaseReservations(ctx, tx, ids)
+		return err
+	})
+	return ids, products, err
 }
 
 // LIMIT NULLIF($1, 0): a limit of 0 means no limit (LIMIT NULL).
 func (m pgOrderRepo) GetOrders(p model.Paging, ctx context.Context) (orders []model.Order, err error) {
 	rows, err := m.DB.Query(ctx,
 		`SELECT `+orderColumns+` FROM orders WHERE deleted_at IS NULL
-		ORDER BY id LIMIT NULLIF($1, 0) OFFSET $2`,
+		ORDER BY created_at DESC LIMIT NULLIF($1, 0) OFFSET $2`,
 		p.Limit, p.Offset)
 	if err != nil {
 		return nil, err

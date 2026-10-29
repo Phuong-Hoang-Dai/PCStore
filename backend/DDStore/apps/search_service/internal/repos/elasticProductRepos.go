@@ -3,8 +3,10 @@ package repos
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"time"
 
 	"github.com/Phuong-Hoang-Dai/DDStore/app/search_service/internal/model"
@@ -74,12 +76,17 @@ func (r *esProductRepo) BulkIndex(ctx context.Context, products []model.Product)
 	return err
 }
 
+// Delete removes a product; deleting one that was never indexed is not an error.
 func (r *esProductRepo) Delete(ctx context.Context, id string) error {
-	res, err := r.es.Delete(r.index, id).Refresh(refresh.True).Do(ctx)
-	if err != nil {
-		log.Println(fmt.Errorf("delete product: %s", res.Result.String()).Error())
+	_, err := r.es.Delete(r.index, id).Refresh(refresh.True).Do(ctx)
+	var esErr *types.ElasticsearchError
+	if errors.As(err, &esErr) && esErr.Status == http.StatusNotFound {
+		return nil
 	}
-	return nil
+	if err != nil {
+		log.Println(fmt.Errorf("delete product: %w", err))
+	}
+	return err
 }
 
 // Search runs a bool query built from the request and returns the matching page.

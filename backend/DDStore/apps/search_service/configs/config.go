@@ -7,12 +7,14 @@ import (
 )
 
 type Config struct {
-	AppName    string
-	Port       string
-	ESAddrs    string // comma-separated Elasticsearch node URLs
-	ESUsername string
-	ESPassword string
-	ESIndex    string
+	AppName           string
+	Port              string
+	ESAddrs           string // comma-separated Elasticsearch node URLs
+	ESUsername        string
+	ESPassword        string
+	ESIndex           string
+	BrokerURI         string
+	ProductIndexQueue string // filled by catalog_service whenever a product changes
 }
 
 var Cfg Config
@@ -22,12 +24,14 @@ func LoadConfig() {
 	godotenv.Load("./configs/.env")
 
 	Cfg = Config{
-		AppName:    getEnv("APP_NAME", "PC Store Search"),
-		Port:       getEnv("PORT", "8889"),
-		ESAddrs:    getEnv("ES_ADDRESSES", "http://localhost:9200"),
-		ESUsername: os.Getenv("ES_USERNAME"),
-		ESPassword: os.Getenv("ES_PASSWORD"),
-		ESIndex:    getEnv("ES_INDEX", "products"),
+		AppName:           getEnv("APP_NAME", "PC Store Search"),
+		Port:              getEnv("PORT", "8889"),
+		ESAddrs:           getEnv("ES_ADDRESSES", "http://localhost:9200"),
+		ESUsername:        os.Getenv("ES_USERNAME"),
+		ESPassword:        os.Getenv("ES_PASSWORD"),
+		ESIndex:           getEnv("ES_INDEX", "products"),
+		BrokerURI:         getEnv("BROKER_URI", "amqp://guest:guest@localhost:5672/"),
+		ProductIndexQueue: getEnv("PRODUCT_INDEX_QUEUE", "ProductIndex"),
 	}
 }
 

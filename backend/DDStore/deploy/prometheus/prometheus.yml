@@ -1,0 +1,36 @@
+# Scraped over the compose network. The services serve /metrics on :2112 (not published to
+# the host); search_service only runs with --profile search and shows as down otherwise.
+global:
+    scrape_interval: 15s
+    evaluation_interval: 15s
+
+scrape_configs:
+    - job_name: services
+      static_configs:
+          - targets: ["api_gateway:2112"]
+            labels: { service: api_gateway }
+          - targets: ["user_service:2112"]
+            labels: { service: user_service }
+          - targets: ["product_service:2112"]
+            labels: { service: product_service }
+          - targets: ["order_service:2112"]
+            labels: { service: order_service }
+          - targets: ["search_service:2112"]
+            labels: { service: search_service }
+
+    # Built-in rabbitmq_prometheus plugin: publish/deliver rates, connections, ...
+    - job_name: rabbitmq
+      static_configs:
+          - targets: ["rabbitmq:15692"]
+
+    # Per-queue depth and consumers (the default endpoint only has totals over all queues).
+    - job_name: rabbitmq-queues
+      metrics_path: /metrics/detailed
+      params:
+          family: [queue_coarse_metrics, queue_consumer_count]
+      static_configs:
+          - targets: ["rabbitmq:15692"]
+
+    - job_name: prometheus
+      static_configs:
+          - targets: ["localhost:9090"]

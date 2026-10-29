@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 
 	Err "github.com/Phuong-Hoang-Dai/DDStore/api_gateway/constant"
@@ -88,15 +89,13 @@ func getDatas(baseUrl string) func(ctx *gin.Context) {
 		ctx.JSON(statusCode, bodyData)
 	}
 }
+// Ids are forwarded as-is: products use Mongo ObjectIDs while users/orders use ints,
+// and each downstream service validates its own id format.
 func getDataById(baseUrl string) func(ctx *gin.Context) {
 	return func(ctx *gin.Context) {
-		id, err := strconv.Atoi(ctx.Param("id"))
-		if err != nil {
-			responeError(http.StatusBadRequest, err, ctx)
-			return
-		}
+		id := url.PathEscape(ctx.Param("id"))
 
-		bodyData, statusCode, err := makeRequest(http.MethodGet, fmt.Sprintf("%s/%d", baseUrl, id), bytes.NewBuffer([]byte{}))
+		bodyData, statusCode, err := makeRequest(http.MethodGet, fmt.Sprintf("%s/%s", baseUrl, id), bytes.NewBuffer([]byte{}))
 		if err != nil {
 			responeError(statusCode, err, ctx)
 			return
@@ -108,16 +107,13 @@ func getDataById(baseUrl string) func(ctx *gin.Context) {
 
 func updateDataById(baseUrl string) func(ctx *gin.Context) {
 	return func(ctx *gin.Context) {
-		id, err := strconv.Atoi(ctx.Param("id"))
-		if err != nil {
-			responeError(http.StatusBadRequest, err, ctx)
-			return
-		}
+		id := url.PathEscape(ctx.Param("id"))
 		body, err := io.ReadAll(ctx.Request.Body)
 		if err != nil {
 			responeError(http.StatusBadRequest, Err.ErrCannotReadBody, ctx)
+			return
 		}
-		bodyData, statusCode, err := makeRequest(http.MethodPut, fmt.Sprintf("%s/%d", baseUrl, id), bytes.NewBuffer(body))
+		bodyData, statusCode, err := makeRequest(http.MethodPut, fmt.Sprintf("%s/%s", baseUrl, id), bytes.NewBuffer(body))
 		if err != nil {
 			responeError(statusCode, err, ctx)
 			return
@@ -129,13 +125,9 @@ func updateDataById(baseUrl string) func(ctx *gin.Context) {
 
 func deleteDataById(baseUrl string) func(ctx *gin.Context) {
 	return func(ctx *gin.Context) {
-		id, err := strconv.Atoi(ctx.Param("id"))
-		if err != nil {
-			responeError(http.StatusBadRequest, err, ctx)
-			return
-		}
+		id := url.PathEscape(ctx.Param("id"))
 
-		bodyData, statusCode, err := makeRequest(http.MethodDelete, fmt.Sprintf("%s/%d", baseUrl, id), bytes.NewBuffer([]byte{}))
+		bodyData, statusCode, err := makeRequest(http.MethodDelete, fmt.Sprintf("%s/%s", baseUrl, id), bytes.NewBuffer([]byte{}))
 		if err != nil {
 			responeError(statusCode, err, ctx)
 			return

@@ -103,11 +103,10 @@ func (p productHTTPClient) GetProductsByIds(ids []string, ctx context.Context) (
 }
 
 func (p productHTTPClient) UpdateProductState(productId string, state catalog.ProductState, ctx context.Context) (err error) {
-	url := fmt.Sprintf("%s/", p.baseURL)
+	url := fmt.Sprintf("%s/%s/state", p.baseURL, productId)
 
 	jsonData, _ := json.Marshal(map[string]any{
-		"product_id": productId,
-		"state":      state,
+		"state": state,
 	})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(jsonData))
 	if err != nil {

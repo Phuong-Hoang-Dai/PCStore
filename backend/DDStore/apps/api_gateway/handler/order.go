@@ -2,9 +2,11 @@ package handler
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 
 	Err "github.com/Phuong-Hoang-Dai/DDStore/api_gateway/constant"
@@ -22,6 +24,31 @@ func completeOrderById(baseUrl string) func(ctx *gin.Context) {
 		if err != nil {
 			responeError(statusCode, err, ctx)
 			return
+		}
+
+		ctx.JSON(statusCode, bodyData)
+	}
+}
+
+// getOrderById lets admins read any order but users only their own. The owner is only
+// known once the order is fetched, so the check can't be a middleware on the URL id.
+func getOrderById(baseUrl string) func(ctx *gin.Context) {
+	return func(ctx *gin.Context) {
+		id := url.PathEscape(ctx.Param("id"))
+		bodyData, statusCode, err := makeRequest(http.MethodGet, fmt.Sprintf("%s/%s", baseUrl, id), bytes.NewBuffer([]byte{}))
+		if err != nil {
+			responeError(statusCode, err, ctx)
+			return
+		}
+
+		if statusCode == http.StatusOK && ctx.GetString("role") == "user" {
+			var order struct {
+				UserId int `json:"userId"`
+			}
+			if err := json.Unmarshal(bodyData["data"], &order); err != nil || order.UserId != ctx.GetInt("id") {
+				responeError(http.StatusForbidden, Err.ErrNotAllowToAccess, ctx)
+				return
+			}
 		}
 
 		ctx.JSON(statusCode, bodyData)

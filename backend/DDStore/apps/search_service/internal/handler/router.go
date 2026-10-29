@@ -6,14 +6,15 @@ import (
 	"net/http"
 
 	"github.com/Phuong-Hoang-Dai/DDStore/app/search_service/configs"
-	"github.com/elastic/go-elasticsearch/v8"
+	"github.com/Phuong-Hoang-Dai/DDStore/app/search_service/internal/metrics"
+	"github.com/Phuong-Hoang-Dai/DDStore/app/search_service/internal/service"
 	"github.com/gin-gonic/gin"
 )
 
-// SetupHttp wires the dependencies, ensures the index exists and returns a
-// ready-to-run *http.Server (started/stopped by the caller for graceful shutdown).
-func SetupHttp(es *elasticsearch.TypedClient) *http.Server {
-	searchHandler := NewSearchHandler(es)
+// SetupHttp ensures the index exists and returns a ready-to-run *http.Server
+// (started/stopped by the caller for graceful shutdown).
+func SetupHttp(searchService service.SearchService) *http.Server {
+	searchHandler := NewSearchHandler(searchService)
 
 	if _, err := searchHandler.service.EnsureIndex(context.Background()); err != nil {
 		// Non-fatal: indexing will lazily create the index with a dynamic
@@ -22,6 +23,8 @@ func SetupHttp(es *elasticsearch.TypedClient) *http.Server {
 	}
 
 	r := gin.Default()
+	metrics.Serve()
+	r.Use(metrics.Middleware())
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})

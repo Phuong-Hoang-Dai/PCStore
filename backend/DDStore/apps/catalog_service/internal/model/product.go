@@ -12,7 +12,7 @@ type Product struct {
 	Desc      string                  `bson:"description"   json:"description"`
 	State     ProductState            `bson:"state"         json:"state"`
 	Brand     string                  `bson:"brand"         json:"brand"`
-	Cate      Category                `bson:"cate"          json:"cate"`
+	Cate      ProductCategory         `bson:"cate"          json:"cate"`
 	Price     float64                 `bson:"price"         json:"price"`
 	Type      string                  `bson:"type"          json:"type"`
 	Images    []Media                 `bson:"images"        json:"images"`

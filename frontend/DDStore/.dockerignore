@@ -1,0 +1,5 @@
+node_modules
+dist
+# The image gets VITE_API_URL from a build argument, not a local .env.
+.env
+.env.*

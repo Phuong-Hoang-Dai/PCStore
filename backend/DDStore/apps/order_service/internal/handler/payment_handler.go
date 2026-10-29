@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"errors"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -11,7 +11,6 @@ import (
 	"github.com/Phuong-Hoang-Dai/DDStore/app/order_service/internal/repos"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/order_service/internal/service"
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stripe/stripe-go/v87"
 	"github.com/stripe/stripe-go/v87/webhook"
@@ -19,16 +18,18 @@ import (
 
 type PaymentHandler struct {
 	paymentService service.PaymentService
+	stripeClient   *stripe.Client
 	webhookSecret  string
 }
 
 func InitPayment(db *pgxpool.Pool, userUrl string, productUrl string) PaymentHandler {
+	stripeClient := stripe.NewClient(configs.Cfg.StripeSecretKey)
 	p := PaymentHandler{
 		paymentService: service.PaymentService{
 			Repo:           repos.NewPgPaymentRepo(db),
 			UserService:    userHTTPClient{baseURL: fmt.Sprint(userUrl, "/user")},
 			ProductService: productHTTPClient{baseURL: fmt.Sprint(productUrl, "/product")},
-			StripeCLient:   stripe.NewClient(configs.Cfg.StripeSecretKey),
+			StripeCLient:   stripeClient,
 			OrderService: service.NewOrderService(
 				repos.NewPgOrderRepo(db),
 				productHTTPClient{baseURL: fmt.Sprint(productUrl, "/product")},
@@ -39,6 +40,7 @@ func InitPayment(db *pgxpool.Pool, userUrl string, productUrl string) PaymentHan
 			SuccessURL: configs.Cfg.StripeSuccessURL,
 			CancelURL:  configs.Cfg.StripeCancelURL,
 		},
+		stripeClient:  stripeClient,
 		webhookSecret: configs.Cfg.StripeWebhookKey,
 	}
 
@@ -54,14 +56,36 @@ func (p PaymentHandler) StripeWebhook() func(ctx *gin.Context) {
 			return
 		}
 
-		event, err := webhook.ConstructEvent(payload, ctx.GetHeader("Stripe-Signature"), p.webhookSecret)
-		if err != nil {
+		signature := ctx.GetHeader("Stripe-Signature")
+
+		// Event destinations with a thin payload send "v2.core.event" notifications; snapshot
+		// destinations and `stripe listen` send full "event" objects. Both are verified.
+		var envelope struct {
+			Object string `json:"object"`
+		}
+		if err := json.Unmarshal(payload, &envelope); err != nil {
 			responeError(http.StatusBadRequest, err, ctx)
 			return
 		}
 
+		if envelope.Object == "v2.core.event" {
+			notif, parseErr := p.stripeClient.ParseEventNotification(payload, signature, p.webhookSecret)
+			if parseErr != nil {
+				responeError(http.StatusBadRequest, parseErr, ctx)
+				return
+			}
+			err = p.paymentService.HandleEventNotification(notif, ctx)
+		} else {
+			event, parseErr := webhook.ConstructEvent(payload, signature, p.webhookSecret)
+			if parseErr != nil {
+				responeError(http.StatusBadRequest, parseErr, ctx)
+				return
+			}
+			err = p.paymentService.HandleWebhookEvent(event, ctx)
+		}
+
 		// A non-2xx response makes Stripe retry the event.
-		if err := p.paymentService.HandleWebhookEvent(event, ctx); err != nil {
+		if err != nil {
 			responeError(http.StatusInternalServerError, err, ctx)
 			return
 		}
@@ -118,12 +142,8 @@ func (p PaymentHandler) CreateCheckoutSession() func(ctx *gin.Context) {
 		}
 
 		url, err := p.paymentService.CreateCheckoutSession(orderId, ctx)
-		if errors.Is(err, pgx.ErrNoRows) {
-			responeError(http.StatusNotFound, err, ctx)
-			return
-		}
 		if err != nil {
-			responeError(http.StatusInternalServerError, err, ctx)
+			responeOrderError(err, ctx)
 			return
 		}
 

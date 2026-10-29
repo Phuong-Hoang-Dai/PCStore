@@ -5,11 +5,8 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/Phuong-Hoang-Dai/DDStore/app/search_service/configs"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/search_service/internal/model"
-	"github.com/Phuong-Hoang-Dai/DDStore/app/search_service/internal/repos"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/search_service/internal/service"
-	"github.com/elastic/go-elasticsearch/v8"
 	"github.com/gin-gonic/gin"
 )
 
@@ -17,9 +14,8 @@ type SearchHandler struct {
 	service service.SearchService
 }
 
-func NewSearchHandler(es *elasticsearch.TypedClient) SearchHandler {
-	repo := repos.NewESProductRepo(es, configs.Cfg.ESIndex)
-	return SearchHandler{service: service.NewSearchService(repo)}
+func NewSearchHandler(searchService service.SearchService) SearchHandler {
+	return SearchHandler{service: searchService}
 }
 
 // IndexProduct handles POST /search/products — insert a single product.

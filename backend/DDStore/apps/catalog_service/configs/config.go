@@ -15,6 +15,7 @@ type Config struct {
 	BrokerURI           string
 	ProductCreatedQueue string
 	ProductEditedQueue  string
+	ProductIndexQueue   string
 	WorkerPerQueue      int
 }
 
@@ -30,6 +31,7 @@ func LoadConfig() {
 		BrokerURI:           getEnv("BROKER_URI", "amqp://guest:guest@localhost:5672/"),
 		ProductCreatedQueue: getEnv("PRODUCT_CREATED_QUEUE", "ProductCreated"),
 		ProductEditedQueue:  getEnv("PRODUCT_EDITED_QUEUE", "ProductEdited"),
+		ProductIndexQueue:   getEnv("PRODUCT_INDEX_QUEUE", "ProductIndex"),
 		WorkerPerQueue:      getEnvInt("WORKER_PER_QUEUE", 20),
 	}
 }

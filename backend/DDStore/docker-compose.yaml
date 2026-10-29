@@ -1,83 +1,246 @@
+# Full stack:   docker compose up --build        -> http://localhost:5173
+# With search:  docker compose --profile search up --build
+# Metrics:      docker compose --profile monitoring up -d  -> http://localhost:3000 (Grafana),
+#               http://localhost:9090 (Prometheus)
+# Secrets (JWT, Stripe) come from .env next to this file; see .env.example.
+name: ddstore
+
+x-go-service: &go-service
+    restart: unless-stopped
+
 services:
-    mysql:
-        image: mysql:latest
-        container_name: DDStore_mysql
-        restart: always
+    # ---------- infrastructure ----------
+    mongo:
+        image: mongo:7
+        restart: unless-stopped
+        volumes:
+            - mongo-data:/data/db
+        healthcheck:
+            test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+            interval: 10s
+            timeout: 5s
+            retries: 10
+
+    redis:
+        image: redis:7-alpine
+        restart: unless-stopped
+        healthcheck:
+            test: ["CMD", "redis-cli", "ping"]
+            interval: 10s
+            timeout: 5s
+            retries: 10
+
+    rabbitmq:
+        # The services use the AMQP 1.0 client, which needs RabbitMQ 4.x.
+        image: rabbitmq:4-management
+        restart: unless-stopped
         environment:
-            MYSQL_ROOT_PASSWORD: 123
-            MYSQL_DATABASE: DDStore
-            MYSQL_USER: hoangdai
-            MYSQL_PASSWORD: hd123  
+            # Not guest: RabbitMQ only lets guest connect from localhost, i.e. not from other containers.
+            RABBITMQ_DEFAULT_USER: ddstore
+            RABBITMQ_DEFAULT_PASS: ddstore
         ports:
-            - "25025:3306"
-    # volumes:
-    #     - mysql-data:/var/lib/mysql
-    api_gateway:
-        container_name: api_gateway
-        build:
-            context: ./apps/api_gateway
-            dockerfile: Dockerfile
-        depends_on:
-            - product_service
-            - order_service
-            - user_service
+            - "127.0.0.1:15672:15672" # management UI
+        volumes:
+            - rabbitmq-data:/var/lib/rabbitmq
+        healthcheck:
+            test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+            interval: 10s
+            timeout: 10s
+            retries: 12
+
+    postgres:
+        image: postgres:17-alpine
+        restart: unless-stopped
+        environment:
+            POSTGRES_USER: ddstore
+            POSTGRES_PASSWORD: ddstore
+            POSTGRES_DB: ddstore_users
+        volumes:
+            - postgres-data:/var/lib/postgresql/data
+            - ./deploy/postgres:/docker-entrypoint-initdb.d:ro
+        healthcheck:
+            # Over TCP and against ddstore_orders, so it only passes once init scripts are done.
+            test: ["CMD-SHELL", "pg_isready -h localhost -U ddstore -d ddstore_orders"]
+            interval: 5s
+            timeout: 5s
+            retries: 20
+
+    elasticsearch:
+        image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
+        profiles: ["search"]
+        restart: unless-stopped
+        environment:
+            discovery.type: single-node
+            xpack.security.enabled: "false"
+            ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+        volumes:
+            - es-data:/usr/share/elasticsearch/data
+        healthcheck:
+            test: ["CMD-SHELL", "curl -fs http://localhost:9200/_cluster/health || exit 1"]
+            interval: 10s
+            timeout: 5s
+            retries: 30
+
+    # ---------- services ----------
+    user_service:
+        <<: *go-service
+        build: ./apps/user_service
         environment:
             APP_NAME: "DDStore"
-            JWT_SECRET: "099a0fa5-d9c6-4d6a-bf04-faf39e16e75b"
+            GIN_MODE: release
+            DB_CONN_STR: "postgres://ddstore:ddstore@postgres:5432/ddstore_users?sslmode=disable"
+        depends_on:
+            postgres:
+                condition: service_healthy
+
+    # The code lives in apps/catalog_service; the gateway and order_service call it by this name.
+    product_service:
+        <<: *go-service
+        build: ./apps/catalog_service
+        environment:
+            APP_NAME: "DDStore"
+            GIN_MODE: release
+            MONGO_URI: "mongodb://mongo:27017"
+            DB_NAME: "ddstore"
+            REDIS_ADDR: "redis://redis:6379"
+            BROKER_URI: "amqp://ddstore:ddstore@rabbitmq:5672/"
+            PRODUCT_CREATED_QUEUE: "ProductCreated"
+            PRODUCT_EDITED_QUEUE: "ProductEdited"
+            PRODUCT_INDEX_QUEUE: "ProductIndex"
+            WORKER_PER_QUEUE: "20"
+        depends_on:
+            mongo:
+                condition: service_healthy
+            redis:
+                condition: service_healthy
+            rabbitmq:
+                condition: service_healthy
+
+    order_service:
+        <<: *go-service
+        build:
+            context: ./apps
+            dockerfile: order_service/Dockerfile
+        environment:
+            APP_NAME: "DDStore"
+            GIN_MODE: release
+            DB_CONN_STR: "postgres://ddstore:ddstore@postgres:5432/ddstore_orders?sslmode=disable"
+            STRIPE_SECRET_KEY: "sk_test_51USFbjQ4KdlzZGnoo4NDNFp5cXgS67lCH6sF4uaw3k9LJ0jOaxQf41bh8T5JmC8bCaq2e1KuFHtcxoAt4rksdnvM00BTCEOSpt"
+            STRIPE_WEBHOOK_SECRET: "whsec_BU1rICYCcYVDzb5cSelr13EHEVQnMcV9"
+            STRIPE_SUCCESS_URL: "http://localhost:5173/payment/success"
+            STRIPE_CANCEL_URL: "http://localhost:5173/payment/cancel"
+        ports:
+            # Only for Stripe webhooks: stripe listen --forward-to localhost:7777/payment/webhook
+            - "127.0.0.1:7777:7777"
+        depends_on:
+            postgres:
+                condition: service_healthy
+            product_service:
+                condition: service_started
+            user_service:
+                condition: service_started
+
+    api_gateway:
+        <<: *go-service
+        build: ./apps/api_gateway
+        environment:
+            APP_NAME: "DDStore"
+            GIN_MODE: release
+            JWT_SECRET: ${JWT_SECRET:-change-me}
             JWT_EXPIRES_IN: "12h"
             JWT_RefreshToken_EXPIRES_IN: "30d"
-        restart: always
+            BROKER_URI: "amqp://ddstore:ddstore@rabbitmq:5672/"
+            PRODUCT_CREATED_QUEUE: "ProductCreated"
         ports:
-            - "9999:10000"    
-    product_service:
-        container_name: product_service
-        build:
-            context: ./apps/product_service
-            dockerfile: Dockerfile
-        environment:
-            APP_NAME: "DDStore"
-            DB_CONN_STR: "root:123@tcp(mysql:3306)/DDStore?charset=utf8mb4&parseTime=True&loc=Local"
-        restart: always
-        ports:
-            - "8888"   
-    order_service:
-        container_name: order_service
-        build:
-            context: ./apps/order_service
-            dockerfile: Dockerfile
+            - "9999:10000"
         depends_on:
-            - mysql
-            - product_service
-        environment:
-            APP_NAME: "DDStore"
-            DB_CONN_STR: "root:123@tcp(mysql:3306)/DDStore?charset=utf8mb4&parseTime=True&loc=Local"
-        restart: always
-        ports:
-            - "7777"    
-    user_service:
-        container_name: user_service
-        build:
-            context: ./apps/user_service
-            dockerfile: Dockerfile
-        depends_on:
-            - mysql
-        environment:
-            APP_NAME: "DDStore"
-            DB_CONN_STR: "root:123@tcp(mysql:3306)/DDStore?charset=utf8mb4&parseTime=True&loc=Local"
-        restart: always
-        ports:
-            - "6666"
-    payment_service:
-        container_name: payment_service
-        build:
-            context: ./apps/payment_service
-            dockerfile: Dockerfile
-        depends_on:
-            - mysql
-        environment:
-            APP_NAME: "DDStore"
-            DB_CONN_STR: "root:123@tcp(mysql:3306)/DDStore?charset=utf8mb4&parseTime=True&loc=Local"
-        restart: always
-        ports:
-            - "5555"
+            rabbitmq:
+                condition: service_healthy
+            product_service:
+                condition: service_started
+            order_service:
+                condition: service_started
+            user_service:
+                condition: service_started
 
+    search_service:
+        <<: *go-service
+        profiles: ["search"]
+        build: ./apps/search_service
+        environment:
+            APP_NAME: "DDStore Search"
+            GIN_MODE: release
+            PORT: "8889"
+            ES_ADDRESSES: "http://elasticsearch:9200"
+            ES_INDEX: "products"
+            # catalog_service publishes every product change to this queue.
+            BROKER_URI: "amqp://ddstore:ddstore@rabbitmq:5672/"
+            PRODUCT_INDEX_QUEUE: "ProductIndex"
+        depends_on:
+            elasticsearch:
+                condition: service_healthy
+            rabbitmq:
+                condition: service_healthy
+
+    frontend:
+        build:
+            context: ../../frontend/DDStore
+            args:
+                # Resolved by the browser, so it is the host-published gateway port.
+                VITE_API_URL: "http://localhost:9999/api/v1"
+        restart: unless-stopped
+        ports:
+            # Must stay 5173: the gateway's CORS policy only allows http://localhost:5173.
+            - "5173:80"
+        depends_on:
+            - api_gateway
+
+    # Public URL for Stripe webhooks: docker compose --profile tunnel up -d ngrok
+    # The URL is in its logs and at http://localhost:4040 (request inspector).
+    ngrok:
+        image: ngrok/ngrok:3.39.13-alpine
+        profiles: ["tunnel"]
+        restart: unless-stopped
+        # Empty NGROK_URL lets ngrok pick the account's default dev domain.
+        command: ["http", "order_service:7777", "--log", "stdout"]
+        environment:
+            NGROK_AUTHTOKEN: "3LKihg5XzxrqdgerdRqML6sQ9k5_4ov4CSi7vi3WmbB55uQDC"
+        ports:
+            - "127.0.0.1:4040:4040"
+
+    # Scrapes every service's /metrics (internal port 2112) and RabbitMQ; config in deploy/prometheus.
+    prometheus:
+        image: prom/prometheus:v3.15.1
+        profiles: ["monitoring"]
+        restart: unless-stopped
+        volumes:
+            - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+            - prometheus-data:/prometheus
+        ports:
+            - "127.0.0.1:9090:9090"
+
+    # Dashboards on top of Prometheus (admin / admin on first login). The data source and the
+    # "DDStore Overview" dashboard are provisioned from deploy/grafana.
+    grafana:
+        image: grafana/grafana:13.2.5
+        profiles: ["monitoring"]
+        restart: unless-stopped
+        environment:
+            GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/dashboards/ddstore-overview.json
+        volumes:
+            - ./deploy/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+            - ./deploy/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+            - ./deploy/grafana/dashboards:/etc/grafana/dashboards:ro
+            - grafana-data:/var/lib/grafana
+        ports:
+            - "127.0.0.1:3000:3000"
+        depends_on:
+            - prometheus
+
+volumes:
+    mongo-data:
+    rabbitmq-data:
+    postgres-data:
+    es-data:
+    prometheus-data:
+    grafana-data:

@@ -10,8 +10,8 @@ import (
 	"github.com/Phuong-Hoang-Dai/DDStore/app/order_service/internal/repos"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/order_service/internal/service"
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"gorm.io/gorm"
 )
 
 type OrderHandler struct {
@@ -81,15 +81,8 @@ func (o OrderHandler) CancelOrder() func(ctx *gin.Context) {
 			return
 		}
 
-		err = o.orderService.CancelOrder(id, ctx)
-
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			responeError(http.StatusNotFound, err, ctx)
-			return
-		}
-
-		if err != nil {
-			responeError(http.StatusInternalServerError, err, ctx)
+		if err := o.orderService.CancelOrder(id, ctx); err != nil {
+			responeOrderError(err, ctx)
 			return
 		}
 
@@ -109,14 +102,8 @@ func (o OrderHandler) GetOrderById() func(ctx *gin.Context) {
 		}
 
 		data, err := o.orderService.GetOrderById(id, ctx)
-
-		if err == gorm.ErrRecordNotFound {
-			responeError(http.StatusNotFound, err, ctx)
-			return
-		}
-
 		if err != nil {
-			responeError(http.StatusInternalServerError, err, ctx)
+			responeOrderError(err, ctx)
 			return
 		}
 
@@ -142,14 +129,11 @@ func (o OrderHandler) UpdateOrderState() func(ctx *gin.Context) {
 
 		if err := ctx.ShouldBind(&data); err != nil {
 			responeError(http.StatusBadRequest, err, ctx)
+			return
 		}
 
 		if err := o.orderService.UpdateOrder(id, data.State, ctx); err != nil {
-			if err == gorm.ErrRecordNotFound {
-				responeError(http.StatusNotFound, err, ctx)
-			} else {
-				responeError(http.StatusInternalServerError, err, ctx)
-			}
+			responeOrderError(err, ctx)
 			return
 		}
 
@@ -169,11 +153,7 @@ func (o OrderHandler) CompleteOrder() func(ctx *gin.Context) {
 		}
 
 		if err := o.orderService.UpdateOrder(id, model.Completed, ctx); err != nil {
-			if err == gorm.ErrRecordNotFound {
-				responeError(http.StatusNotFound, err, ctx)
-			} else {
-				responeError(http.StatusInternalServerError, err, ctx)
-			}
+			responeOrderError(err, ctx)
 			return
 		}
 
@@ -257,6 +237,20 @@ func (o OrderHandler) GetHistoryOrders() func(ctx *gin.Context) {
 				"total":  len(data),
 			},
 		})
+	}
+}
+
+func responeOrderError(err error, ctx *gin.Context) {
+	switch {
+	case errors.Is(err, pgx.ErrNoRows), errors.Is(err, model.ErrProductNotFound):
+		responeError(http.StatusNotFound, err, ctx)
+	case errors.Is(err, model.ErrInvalidQuantity):
+		responeError(http.StatusBadRequest, err, ctx)
+	case errors.Is(err, model.ErrOrderIsCanceled), errors.Is(err, model.ErrOrderNotCancellable),
+		errors.Is(err, model.ErrOrderNotPaid), errors.Is(err, model.ErrOrderPaymentExpired):
+		responeError(http.StatusConflict, err, ctx)
+	default:
+		responeError(http.StatusInternalServerError, err, ctx)
 	}
 }
 

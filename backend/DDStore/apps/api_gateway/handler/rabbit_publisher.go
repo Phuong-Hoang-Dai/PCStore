@@ -27,7 +27,10 @@ func SetupRabbit(ctx context.Context) *rmq.AmqpConnection {
 		log.Panicf("Failed to declare a queue: %v", err)
 	}
 
-
+	publisher, err := conn.NewPublisher(ctx, &rmq.QueueAddress{Queue: configs.Cfg.ProductCreatedQueue}, nil)
+	if err != nil {
+		log.Panicf("Failed to create publisher: %v", err)
+	}
 
 	RabbitHandler.conn = conn
 	RabbitHandler.createdProductPublisher = publisher

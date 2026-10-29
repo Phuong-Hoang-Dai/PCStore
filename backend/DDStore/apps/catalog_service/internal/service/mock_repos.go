@@ -61,7 +61,7 @@ func (MockRepos) GetProducts(_ context.Context, p model.Paging) (data []model.Pr
 	return data, nil
 }
 
-func (MockRepos) GetProductsByCate(_ context.Context, p model.Paging, cate model.Category) (data []model.Product, err error) {
+func (MockRepos) GetProductsByCate(_ context.Context, p model.Paging, cateId int) (data []model.Product, err error) {
 	for i := p.Offset; i < len(productList); i++ {
 		if i-p.Offset < p.Limit {
 			data = append(data, productList[i])

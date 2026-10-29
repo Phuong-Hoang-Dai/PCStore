@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/Phuong-Hoang-Dai/DDStore/app/product_service/internal/model"
@@ -15,40 +16,70 @@ import (
 
 type productManager struct {
 	repository ProductRepos
+	categories CateRepos
 	rdb        *redis.Client
+	events     ProductEvents
 }
 
-func NewProductService(repos ProductRepos, redis *redis.Client) ProductService {
-	if repos == nil {
+func NewProductService(repos ProductRepos, categories CateRepos, redis *redis.Client, events ProductEvents) ProductService {
+	if repos == nil || categories == nil || events == nil {
 		panic("to gen an error message")
 	}
 
 	return productManager{
 		repository: repos,
+		categories: categories,
 		rdb:        redis,
+		events:     events,
 	}
 }
 
 func (service productManager) CreateProduct(ctx context.Context, data model.Product) (bson.ObjectID, error) {
-	isValid, err := validateProduct(ctx, data, service.repository)
-	if !isValid {
+	if err := service.prepareProduct(ctx, &data); err != nil {
+		return bson.NilObjectID, err
+	}
+	if data.Type == "" {
+		data.Type = model.ProductTypeStandard
+	}
+	// A new product has no stock yet; order_service marks it available once stock is added.
+	data.State = model.OutOfStock
+
+	id, err := service.repository.CreateProduct(ctx, data)
+	if err != nil {
 		return bson.NilObjectID, err
 	}
 
-	if id, err := service.repository.CreateProduct(ctx, data); err != nil {
-		return bson.NilObjectID, err
-	} else {
-		return id, nil
-	}
+	service.invalidateLists(ctx)
+	service.publishUpsert(ctx, id)
+	return id, nil
 }
 
 func (service productManager) UpdateProduct(ctx context.Context, data model.Product) error {
-	isValid, err := validateProduct(ctx, data, service.repository)
-	if !isValid {
+	if err := service.prepareProduct(ctx, &data); err != nil {
 		return err
 	}
 
-	return service.repository.UpdateProduct(ctx, data)
+	if err := service.repository.UpdateProduct(ctx, data); err != nil {
+		return err
+	}
+
+	service.invalidateProduct(ctx, data.Id)
+	service.publishUpsert(ctx, data.Id)
+	return nil
+}
+
+func (service productManager) UpdateProductState(ctx context.Context, id bson.ObjectID, state model.ProductState) error {
+	if state != model.IsAvailable && state != model.OutOfStock {
+		return model.ErrInvalidState
+	}
+
+	if err := service.repository.UpdateProductState(ctx, id, state); err != nil {
+		return err
+	}
+
+	service.invalidateProduct(ctx, id)
+	service.publishUpsert(ctx, id)
+	return nil
 }
 
 func (service productManager) GetProducts(ctx context.Context, p *model.Paging) (products []model.Product, err error) {
@@ -75,8 +106,8 @@ func (service productManager) GetProducts(ctx context.Context, p *model.Paging) 
 	return products, nil
 }
 
-func (service productManager) GetProductsByCate(ctx context.Context, p *model.Paging, cate model.Category) (products []model.Product, err error) {
-	cacheKey := fmt.Sprintf("productsByCate:%v-%v-%v", p.Limit, p.Offset, cate.Id)
+func (service productManager) GetProductsByCate(ctx context.Context, p *model.Paging, cateId int) (products []model.Product, err error) {
+	cacheKey := fmt.Sprintf("productsByCate:%v-%v-%v", p.Limit, p.Offset, cateId)
 
 	data, err := service.rdb.Get(ctx, cacheKey).Bytes()
 	if err == nil {
@@ -86,7 +117,7 @@ func (service productManager) GetProductsByCate(ctx context.Context, p *model.Pa
 	}
 
 	p.Process()
-	products, err = service.repository.GetProductsByCate(ctx, *p, cate)
+	products, err = service.repository.GetProductsByCate(ctx, *p, cateId)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +131,7 @@ func (service productManager) GetProductsByCate(ctx context.Context, p *model.Pa
 }
 
 func (service productManager) GetProductById(ctx context.Context, id bson.ObjectID) (product model.Product, err error) {
-	cacheKey := fmt.Sprintf("product-%v", id)
+	cacheKey := productCacheKey(id)
 
 	data, err := service.rdb.Get(ctx, cacheKey).Bytes()
 	if err == nil {
@@ -123,7 +154,15 @@ func (service productManager) GetProductById(ctx context.Context, id bson.Object
 }
 
 func (service productManager) DeleteProduct(ctx context.Context, id bson.ObjectID) error {
-	return service.repository.DeleteProduct(ctx, id)
+	if err := service.repository.DeleteProduct(ctx, id); err != nil {
+		return err
+	}
+
+	service.invalidateProduct(ctx, id)
+	if err := service.events.ProductDeleted(ctx, id); err != nil {
+		log.Printf("Failed to publish deletion of product %s: %v", id.Hex(), err)
+	}
+	return nil
 }
 
 func (service productManager) GetProductsByIds(ctx context.Context, ids []bson.ObjectID) ([]model.Product, error) {
@@ -161,14 +200,86 @@ func (service productManager) GetPrices(ctx context.Context, items []OrderItemsD
 	return items, nil
 }
 
+// prepareProduct validates the product and copies the current category name into it.
+func (service productManager) prepareProduct(ctx context.Context, data *model.Product) error {
+	if isValid, err := validateProduct(ctx, *data, service.repository); !isValid {
+		return err
+	}
+
+	cate, err := service.categories.GetCateById(ctx, data.Cate.Id)
+	if errors.Is(err, model.ErrNotFound) {
+		return fmt.Errorf("%w: category %d doesn't exist", model.ErrProductIsInvalid, data.Cate.Id)
+	}
+	if err != nil {
+		return err
+	}
+	data.Cate = model.ProductCategory{Id: cate.Id, Name: cate.Name}
+	return nil
+}
+
+// publishUpsert sends the stored product (with its id and timestamps) to the search index.
+// A failed publish is logged, not returned: the product change itself already succeeded.
+func (service productManager) publishUpsert(ctx context.Context, id bson.ObjectID) {
+	product, err := service.repository.GetProductById(ctx, id)
+	if err == nil {
+		err = service.events.ProductUpserted(ctx, product)
+	}
+	if err != nil {
+		log.Printf("Failed to publish product %s for indexing: %v", id.Hex(), err)
+	}
+}
+
+func productCacheKey(id bson.ObjectID) string {
+	return fmt.Sprintf("product-%v", id)
+}
+
+// productCache drops cached product reads after a write, so changes show up
+// immediately instead of after the 30s TTL. Shared by product and category writes.
+type productCache struct {
+	rdb *redis.Client
+}
+
+func (c productCache) invalidateProducts(ctx context.Context, ids ...bson.ObjectID) {
+	for _, id := range ids {
+		c.rdb.Del(ctx, productCacheKey(id))
+	}
+	c.invalidateLists(ctx)
+}
+
+func (c productCache) invalidateLists(ctx context.Context) {
+	for _, pattern := range []string{"products:*", "productsByCate:*"} {
+		iter := c.rdb.Scan(ctx, 0, pattern, 100).Iterator()
+		for iter.Next(ctx) {
+			c.rdb.Del(ctx, iter.Val())
+		}
+		if err := iter.Err(); err != nil {
+			log.Printf("Failed to invalidate %s cache: %v", pattern, err)
+		}
+	}
+}
+
+func (service productManager) invalidateProduct(ctx context.Context, id bson.ObjectID) {
+	productCache{rdb: service.rdb}.invalidateProducts(ctx, id)
+}
+
+func (service productManager) invalidateLists(ctx context.Context) {
+	productCache{rdb: service.rdb}.invalidateLists(ctx)
+}
+
 func validateProduct(ctx context.Context, product model.Product, repo ProductRepos) (bool, error) {
+	if strings.TrimSpace(product.Name) == "" {
+		return false, fmt.Errorf("%w: name is required", model.ErrProductIsInvalid)
+	}
+	if product.Price < 0 {
+		return false, fmt.Errorf("%w: price must not be negative", model.ErrProductIsInvalid)
+	}
+
 	errList := ""
 	if product.Type == model.ProductTypeComposite {
 		for _, u := range product.Option {
 			for _, p := range u {
 				isValid, err := repo.IsProductExist(ctx, p.Id)
 				if err != nil {
-					log.Fatal(err)
 					return false, err
 				}
 				if !isValid {

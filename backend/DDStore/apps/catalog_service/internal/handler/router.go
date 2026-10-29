@@ -3,16 +3,18 @@ package handler
 import (
 	"net/http"
 
+	"github.com/Phuong-Hoang-Dai/DDStore/app/product_service/internal/metrics"
+	"github.com/Phuong-Hoang-Dai/DDStore/app/product_service/internal/service"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"github.com/redis/go-redis/v9"
-	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
-func SetupHttp(db *mongo.Client, redis *redis.Client) {
-	productHandler := NewProductHandler(db, redis)
-	//	cateService := InitCateService(db)
+func SetupHttp(productService service.ProductService, cateService service.CateService) {
+	productHandler := NewProductHandler(productService)
+	cateHandler := NewCateHandler(cateService)
 	r := gin.Default()
+	metrics.Serve()
+	r.Use(metrics.Middleware())
 	r.Use(cors.Default())
 	product := r.Group("/product")
 	{
@@ -23,6 +25,7 @@ func SetupHttp(db *mongo.Client, redis *redis.Client) {
 		product.GET("/:id", productHandler.GetProductById())
 		product.GET("/cate/:id", productHandler.GetProductsByCate())
 		product.PUT("/:id", productHandler.UpdateProduct())
+		product.PUT("/:id/state", productHandler.UpdateProductState())
 		product.DELETE("/:id", productHandler.DeleteProduct())
 		product.GET("/healthcheck", func(ctx *gin.Context) {
 			ctx.JSON(http.StatusAccepted, gin.H{
@@ -30,13 +33,13 @@ func SetupHttp(db *mongo.Client, redis *redis.Client) {
 			})
 		})
 	}
-	// cate := r.Group("/category")
-	// {
-	// 	cate.POST("", cateService.CreateCate())
-	// 	cate.PUT("/:id", cateService.UpdateCate())
-	// 	cate.GET("", cateService.GetCates())
-	// 	cate.GET("/:id", cateService.GetCateById())
-	// 	cate.DELETE("/:id", cateService.DeleteCate())
-	// }
+	cate := r.Group("/category")
+	{
+		cate.POST("", cateHandler.CreateCate())
+		cate.PUT("/:id", cateHandler.UpdateCate())
+		cate.GET("", cateHandler.GetCates())
+		cate.GET("/:id", cateHandler.GetCateById())
+		cate.DELETE("/:id", cateHandler.DeleteCate())
+	}
 	r.Run(":8888")
 }

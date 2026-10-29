@@ -7,10 +7,28 @@ interface Cart {
   total: number
 }
 
-const initialState: Cart = {
+export const CART_STORAGE_KEY = "cart";
+
+const emptyCart: Cart = {
   order: [],
   total: 0,
 };
+
+// The cart is persisted so it survives the full-page redirect to Stripe checkout and back.
+const loadCart = (): Cart => {
+  try {
+    const saved = localStorage.getItem(CART_STORAGE_KEY);
+    if (!saved) {
+      return emptyCart;
+    }
+    const cart = JSON.parse(saved) as Cart;
+    return Array.isArray(cart.order) ? cart : emptyCart;
+  } catch {
+    return emptyCart;
+  }
+};
+
+const initialState: Cart = loadCart();
 
 export const cartCount = createSlice({
   name: "cart",
@@ -31,7 +49,6 @@ export const cartCount = createSlice({
       if (existingItem){
         existingItem.quantityOrder += 1
       }else{
-        console.log({ ...action.payload, quantityOrder: 1 });
         state.order.push({ ...action.payload, quantityOrder: 1 });
       }
     },
@@ -61,11 +78,15 @@ export const cartCount = createSlice({
           state.order = state.order.filter(product => product.id !== existingItem.id)
       }
     },
+    clearCart: (state: Cart) => {
+      state.order = [];
+      state.total = 0;
+    },
   },
 });
 
-export const {addItem, increment, decrement, changeByAmout } = cartCount.actions;
+export const {addItem, increment, decrement, changeByAmout, clearCart } = cartCount.actions;
 export default cartCount.reducer;
 export const selectCartTotal = (state: RootState) => state.cart.total;
-export const selectCartItems  =(id:number) => (state: RootState) => state.cart.order.find(product => product.id === id);
+export const selectCartItems  =(id:string) => (state: RootState) => state.cart.order.find(product => product.id === id);
 export const selectCart= (state: RootState) => state.cart;

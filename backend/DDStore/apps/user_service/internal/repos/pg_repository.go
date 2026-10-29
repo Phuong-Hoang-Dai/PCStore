@@ -31,7 +31,7 @@ func (m pgUserRepo) CreateUser(data *model.User, ctx context.Context) (int, erro
 	return data.Id, err
 }
 
-// Empty fields are left unchanged, like gorm's Updates with a struct.
+// Empty fields are left unchanged.
 func (m pgUserRepo) UpdateUser(data model.User, ctx context.Context) error {
 	result, err := m.DB.Exec(ctx,
 		`UPDATE users SET name = COALESCE(NULLIF($2, ''), name), email = COALESCE(NULLIF($3, ''), email),

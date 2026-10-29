@@ -24,9 +24,11 @@ type PaymentService struct {
 }
 
 func (p PaymentService) CreatePaymentInfo(orderId int, userId int, ctx context.Context) (status int, err error) {
+	state := model.IsCreated
 	id, err := p.Repo.CreateOrderPayment(model.OrderPayment{
 		OrderId: orderId,
 		UserId:  userId,
+		State:   &state,
 	}, ctx)
 
 	return id, err
@@ -37,15 +39,34 @@ func (p PaymentService) CreateCheckoutSession(orderId int, ctx context.Context) 
 	if err != nil {
 		return "", err
 	}
-	stripeUser, err := p.getOrCreateCustomer(ctx, paymentOrder.UserId, paymentOrder.PaymentInfo.StripeUserId)
-	if err != nil {
-		return "", err
-	}
 
 	order, err := p.OrderService.GetOrderById(orderId, ctx)
 	if err != nil {
 		return "", err
 	}
+	// Without this a paid order could be checked out (and charged) again, and the
+	// UpdateOrderPayment below would move its completed payment back to processing.
+	if order.State != model.Processing && order.State != model.ReadyToPay {
+		return "", model.ErrOrderNotPaid
+	}
+
+	window := time.Now().Unix() / 1800
+	// The session must close before OrderService.CancelExpiredOrders cancels the order,
+	// or a customer could pay for an order whose stock was already released.
+	expiresAt := (window + 2) * 1800
+	if payBy := order.CreatedAt.Add(model.OrderPaymentTimeout - model.CheckoutExpiryMargin).Unix(); payBy < expiresAt {
+		expiresAt = payBy
+	}
+	// Stripe rejects sessions that expire less than 30 minutes from now.
+	if expiresAt < time.Now().Add(31*time.Minute).Unix() {
+		return "", model.ErrOrderPaymentExpired
+	}
+
+	stripeUser, err := p.getOrCreateCustomer(ctx, paymentOrder.UserId, paymentOrder.PaymentInfo.StripeUserId)
+	if err != nil {
+		return "", err
+	}
+
 	products, err := p.getProducts(ctx, order.Items)
 	if err != nil {
 		return "", err
@@ -79,7 +100,6 @@ func (p PaymentService) CreateCheckoutSession(orderId int, ctx context.Context) 
 		})
 	}
 
-	window := time.Now().Unix() / 1800
 	orderRef := strconv.Itoa(orderId)
 
 	params := &stripe.CheckoutSessionCreateParams{
@@ -94,7 +114,7 @@ func (p PaymentService) CreateCheckoutSession(orderId int, ctx context.Context) 
 		PaymentIntentData: &stripe.CheckoutSessionCreatePaymentIntentDataParams{
 			Metadata: map[string]string{"order_id": orderRef},
 		},
-		ExpiresAt: stripe.Int64((window + 2) * 1800),
+		ExpiresAt: stripe.Int64(expiresAt),
 	}
 	params.SetIdempotencyKey(fmt.Sprintf("checkout-%d-%d", orderId, window))
 
@@ -103,8 +123,10 @@ func (p PaymentService) CreateCheckoutSession(orderId int, ctx context.Context) 
 		return "", err
 	}
 
+	processing := model.IsProcessing
 	err = p.Repo.UpdateOrderPayment(model.OrderPayment{
 		OrderId:     orderId,
+		State:       &processing,
 		AmountTotal: paymentOrder.AmountTotal,
 		Currency:    stripe.String(stripe.CurrencyVND),
 		PaymentInfo: &model.Payment{
@@ -119,7 +141,8 @@ func (p PaymentService) CreateCheckoutSession(orderId int, ctx context.Context) 
 	return session.URL, nil
 }
 
-// HandleWebhookEvent updates the payment and order once Stripe reports the checkout result.
+// HandleWebhookEvent updates the payment and order once Stripe reports the checkout result
+// in a snapshot event, which carries the checkout session itself.
 // Card payments finish with checkout.session.completed; delayed methods (bank transfer, ...)
 // complete later with async_payment_succeeded / async_payment_failed.
 func (p PaymentService) HandleWebhookEvent(event stripe.Event, ctx context.Context) error {
@@ -136,29 +159,53 @@ func (p PaymentService) HandleWebhookEvent(event stripe.Event, ctx context.Conte
 	if err := json.Unmarshal(event.Data.Raw, &session); err != nil {
 		return err
 	}
+	return p.applyCheckoutResult(event.ID, event.Type, &session, ctx)
+}
+
+// HandleEventNotification does the same for a thin event, which only references the checkout
+// session, so the session is fetched from Stripe.
+func (p PaymentService) HandleEventNotification(notif stripe.EventNotificationContainer, ctx context.Context) error {
+	var source interface {
+		FetchRelatedObject(ctx context.Context) (*stripe.CheckoutSession, error)
+	}
+	var eventType stripe.EventType
+	switch n := notif.(type) {
+	case *stripe.V1CheckoutSessionCompletedEventNotification:
+		source, eventType = n, stripe.EventTypeCheckoutSessionCompleted
+	case *stripe.V1CheckoutSessionAsyncPaymentSucceededEventNotification:
+		source, eventType = n, stripe.EventTypeCheckoutSessionAsyncPaymentSucceeded
+	case *stripe.V1CheckoutSessionAsyncPaymentFailedEventNotification:
+		source, eventType = n, stripe.EventTypeCheckoutSessionAsyncPaymentFailed
+	case *stripe.V1CheckoutSessionExpiredEventNotification:
+		source, eventType = n, stripe.EventTypeCheckoutSessionExpired
+	default:
+		return nil
+	}
+
+	session, err := source.FetchRelatedObject(ctx)
+	if err != nil {
+		return err
+	}
+	return p.applyCheckoutResult(notif.GetEventNotification().ID, eventType, session, ctx)
+}
+
+func (p PaymentService) applyCheckoutResult(eventId string, eventType stripe.EventType, session *stripe.CheckoutSession, ctx context.Context) error {
 	orderId, err := strconv.Atoi(session.ClientReferenceID)
 	if err != nil {
 		return fmt.Errorf("invalid client_reference_id %q: %w", session.ClientReferenceID, err)
 	}
 
-	switch event.Type {
+	switch eventType {
 	case stripe.EventTypeCheckoutSessionCompleted:
 		if session.PaymentStatus != stripe.CheckoutSessionPaymentStatusPaid {
 			return nil
 		}
-		return p.completePayment(orderId, ctx)
+		return p.Repo.CompletePayment(eventId, orderId, session.ID, ctx)
 	case stripe.EventTypeCheckoutSessionAsyncPaymentSucceeded:
-		return p.completePayment(orderId, ctx)
+		return p.Repo.CompletePayment(eventId, orderId, session.ID, ctx)
 	default:
-		return p.Repo.UpdatePaymentState(orderId, model.IsFailed, ctx)
+		return p.Repo.FailPayment(eventId, orderId, session.ID, ctx)
 	}
-}
-
-func (p PaymentService) completePayment(orderId int, ctx context.Context) error {
-	if err := p.Repo.UpdatePaymentState(orderId, model.IsCompleted, ctx); err != nil {
-		return err
-	}
-	return p.OrderService.UpdateOrder(orderId, model.Payed, ctx)
 }
 
 func (p PaymentService) getOrCreateCustomer(ctx context.Context, userId int, stripeUserId string) (stripeUser *stripe.Customer, err error) {

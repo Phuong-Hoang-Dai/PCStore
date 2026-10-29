@@ -1,14 +1,16 @@
-FROM golang:alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 WORKDIR /app
 
-COPY . .
+COPY go.mod go.sum ./
 RUN go mod download
 
-RUN go build -o search_service ./cmd
+COPY . .
+RUN CGO_ENABLED=0 go build -o search_service ./cmd
 
 FROM scratch
 
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /app/search_service /
 
 CMD ["/search_service"]

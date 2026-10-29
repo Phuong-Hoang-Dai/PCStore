@@ -1,5 +1,5 @@
 import React from "react";
-import type { Product } from "./product_model";
+import { ProductState, type Product } from "./product_model";
 import { decrement, increment, selectCartItems } from "../order/cartSlice";
 import { useDispatch, useSelector } from "react-redux";
 import type { UnknownAction } from "@reduxjs/toolkit";
@@ -16,6 +16,20 @@ const UpdateQuantityOrder = ({ product }: { product: Product }) => {
     e.preventDefault();
     updateCart(action);
   };
+
+  if (product.state === ProductState.OutOfStock) {
+    return (
+      <div className="h-9 mt-2 flex items-center">
+        <button
+          type="button"
+          disabled
+          className="h-full px-5 rounded-4xl bg-gray-200 text-gray-500 uppercase cursor-not-allowed"
+        >
+          Hết hàng
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div>

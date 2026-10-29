@@ -1,15 +1,7 @@
 package catalog
 
-import (
-	"time"
-
-	"gorm.io/gorm"
-)
-
+// Category is the copy of a category embedded in a catalog product.
 type Category struct {
-	Id        int            `json:"id" gorm:"primaryKey;autoIncrement;<-:create"`
-	Name      string         `json:"name" gorm:"column:name"`
-	CreatedAt time.Time      `json:"create_at"`
-	UpdatedAt time.Time      `json:"update_at"`
-	DeletedAt gorm.DeletedAt `json:"delete_at" gorm:"index"`
+	Id   int    `json:"id"`
+	Name string `json:"name"`
 }

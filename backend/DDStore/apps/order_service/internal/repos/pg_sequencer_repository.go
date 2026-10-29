@@ -58,7 +58,7 @@ func (p pgSequencerkRepo) getNewRange(ctx context.Context) (orderId int, err err
 			return err
 		}
 		err = tx.QueryRow(ctx,
-			`UPDATE order_sequencer SET current_value = $1, max_value = $1 + $2
+			`UPDATE order_sequencer SET current_value = $1::int, max_value = $1::int + $2::int
 				WHERE id = 1  
 				RETURNING current_value`, newRange, usableQuantity,
 		).Scan(&orderId)

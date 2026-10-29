@@ -2,14 +2,21 @@ package model
 
 import (
 	"time"
-
-	"gorm.io/gorm"
 )
 
+// Category is a document of the categories collection. Ids stay ints (not ObjectIDs)
+// because products, the search index and URLs already use int category ids;
+// new ids come from the counters collection.
 type Category struct {
-	Id        int            `json:"id" gorm:"primaryKey;autoIncrement;<-:create"`
-	Name      string         `json:"name" gorm:"column:name"`
-	CreatedAt time.Time      `json:"create_at"`
-	UpdatedAt time.Time      `json:"update_at"`
-	DeletedAt gorm.DeletedAt `json:"delete_at" gorm:"index"`
+	Id        int        `bson:"_id"        json:"id"`
+	Name      string     `bson:"name"       json:"name"`
+	CreatedAt time.Time  `bson:"created_at" json:"create_at"`
+	UpdatedAt time.Time  `bson:"updated_at" json:"update_at"`
+	DeletedAt *time.Time `bson:"deleted_at" json:"delete_at,omitempty"`
+}
+
+// ProductCategory is the copy of a category embedded in each product.
+type ProductCategory struct {
+	Id   int    `bson:"id"   json:"id"`
+	Name string `bson:"name" json:"name"`
 }
