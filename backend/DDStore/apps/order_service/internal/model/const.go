@@ -18,6 +18,8 @@ var (
 	ErrOrderPaymentExpired = errors.New("the payment window for this order has closed")
 	ErrInvalidQuantity     = errors.New("quantity must be greater than 0")
 	ErrProductNotFound     = errors.New("product not found")
+	ErrEmptyOrder          = errors.New("order has no items")
+	ErrInvalidGuest        = errors.New("name and a valid email are required")
 )
 
 const MaxLimit = 50

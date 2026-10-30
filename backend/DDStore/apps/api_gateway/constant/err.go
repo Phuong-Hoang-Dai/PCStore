@@ -11,6 +11,7 @@ var (
 	ErrNotAllowToAccess                  = errors.New("not allow to access")
 	ErrCannotReadRefreshToken            = errors.New("can't read refresh_token")
 	ErrCannotReadBody                    = errors.New("can't read body")
+	ErrPasswordRequired                  = errors.New("password is required")
 	ErrTryToParseEmptyStringToTime       = errors.New("try to parse empty string to time")
 	ErrTrytoParseWrongFormatStringToTime = errors.New("try to parse wrong format string to time")
 )

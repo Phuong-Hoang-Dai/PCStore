@@ -28,6 +28,7 @@ func SetupHttp(db *pgxpool.Pool) {
 	order := r.Group("/order")
 	{
 		order.POST("/:id", orderHandler.CreateOrder())
+		order.POST("/guest", paymentHandler.GuestCheckout())
 		order.GET("/:id", orderHandler.GetOrderById())
 		order.GET("", orderHandler.GetOrders())
 		order.GET("/history/:id", orderHandler.GetHistoryOrders())

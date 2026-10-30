@@ -13,6 +13,12 @@ type OrderResponeDTO struct {
 	Price float64 `json:"price"`
 }
 
+// GuestDTO is who places an order without logging in.
+type GuestDTO struct {
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
 type UserDTO struct {
 	Id    int    `json:"id"`
 	Name  string `json:"name"`

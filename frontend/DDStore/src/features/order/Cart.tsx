@@ -37,7 +37,7 @@ const Cart = () => {
       </button>
       {isShow && (
         <div className="absolute top-20 right-0 z-10 cursor-default">
-          <CartList />
+          <CartList onClose={() => setIsShow(false)} />
         </div>
       )}
     </div>

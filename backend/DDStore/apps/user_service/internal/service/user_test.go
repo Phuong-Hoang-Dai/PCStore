@@ -47,3 +47,24 @@ func TestLogin(t *testing.T) {
 		})
 	}
 }
+
+func TestCreateGuestUser(t *testing.T) {
+	var mock service.MockRepos
+	mock.Init()
+	ctx := context.Background()
+
+	_, err := service.CreateUser(service.UserCreateDTO{Name: "Khách"}, mock, ctx)
+	assert.ErrorIs(t, err, model.ErrInvalidEmail, "a guest needs an email")
+
+	_, err = service.CreateUser(service.UserCreateDTO{Email: "guest@example.com"}, mock, ctx)
+	assert.ErrorIs(t, err, model.ErrNameRequired)
+
+	first, err := service.CreateUser(service.UserCreateDTO{Name: "Khách", Email: " Guest@Example.com "}, mock, ctx)
+	assert.NoError(t, err)
+	again, err := service.CreateUser(service.UserCreateDTO{Name: "Khách", Email: "guest@example.com"}, mock, ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, first, again, "the same email gets the same account")
+
+	_, err = service.VerifyPassword(service.UserDTO{Name: "Khách"}, mock, ctx)
+	assert.Error(t, err, "a guest account can't log in")
+}

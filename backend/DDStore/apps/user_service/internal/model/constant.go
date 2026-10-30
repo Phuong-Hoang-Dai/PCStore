@@ -12,4 +12,7 @@ var (
 	ErrMissingRole                    = errors.New("missing role")
 	ErrNotAllowToAccess               = errors.New("not allow to access")
 	ErrCannotReadRefreshToken         = errors.New("can't read refresh_token")
+	ErrEmailAlreadyRegistered         = errors.New("an account with this email already exists")
+	ErrNameRequired                   = errors.New("name is required")
+	ErrInvalidEmail                   = errors.New("email is invalid")
 )

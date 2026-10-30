@@ -33,7 +33,14 @@ func (u UserService) CreateUser() func(ctx *gin.Context) {
 		}
 
 		id, err := service.CreateUser(data, u.userRepos, ctx)
-		if err != nil {
+		switch {
+		case errors.Is(err, model.ErrNameRequired), errors.Is(err, model.ErrInvalidEmail):
+			responeError(http.StatusBadRequest, err, ctx)
+			return
+		case errors.Is(err, model.ErrEmailAlreadyRegistered):
+			responeError(http.StatusConflict, err, ctx)
+			return
+		case err != nil:
 			responeError(http.StatusInternalServerError, err, ctx)
 			return
 		}

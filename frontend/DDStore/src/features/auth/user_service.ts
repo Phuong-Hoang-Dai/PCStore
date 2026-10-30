@@ -9,6 +9,9 @@ const emptyUser: User = {
   roleId: "",
 }
 
+// Thrown by SignUp with a message that can be shown to the user.
+export class SignUpError extends Error {}
+
 export const SignUp = async (user: UserLogin) => {
   try{
     const res = await fetch(url, {
@@ -18,6 +21,12 @@ export const SignUp = async (user: UserLogin) => {
       },
       body: JSON.stringify(user)
     })
+    if (res.status === 409){
+      throw new SignUpError("Email này đã có tài khoản, vui lòng đăng nhập");
+    }
+    if (res.status === 400){
+      throw new SignUpError("Họ tên, email hoặc mật khẩu không hợp lệ");
+    }
     if (!res.ok){
       throw new Error("Network response was not ok");
     }

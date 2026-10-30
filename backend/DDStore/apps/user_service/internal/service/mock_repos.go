@@ -22,6 +22,15 @@ func (MockRepos) CreateUser(data *model.User, ctx context.Context) (int, error) 
 	return userList[len(userList)-1].Id, nil
 }
 
+func (m MockRepos) FindOrCreateGuest(data *model.User, ctx context.Context) (int, error) {
+	for _, v := range userList {
+		if v.Email == data.Email {
+			return v.Id, nil
+		}
+	}
+	return m.CreateUser(data, ctx)
+}
+
 func (MockRepos) UpdateUser(data model.User, ctx context.Context) error {
 	userList[data.Id-1] = data
 
@@ -35,7 +44,7 @@ func (MockRepos) GetUserById(id int, data *model.User, ctx context.Context) erro
 
 func (MockRepos) GetUserByName(name string, data *model.User, ctx context.Context) error {
 	for _, v := range userList {
-		if v.Name == name {
+		if v.Name == name && v.HashedPassword != nil {
 			*data = v
 			return nil
 		}

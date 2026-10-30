@@ -59,7 +59,7 @@ func (o OrderHandler) CreateOrder() func(ctx *gin.Context) {
 		id, err := o.orderService.CreateOrder(userId, data, ctx)
 
 		if err != nil {
-			responeError(http.StatusInternalServerError, err, ctx)
+			responeOrderError(err, ctx)
 			return
 		}
 
@@ -244,10 +244,12 @@ func responeOrderError(err error, ctx *gin.Context) {
 	switch {
 	case errors.Is(err, pgx.ErrNoRows), errors.Is(err, model.ErrProductNotFound):
 		responeError(http.StatusNotFound, err, ctx)
-	case errors.Is(err, model.ErrInvalidQuantity):
+	case errors.Is(err, model.ErrInvalidQuantity), errors.Is(err, model.ErrEmptyOrder),
+		errors.Is(err, model.ErrInvalidGuest):
 		responeError(http.StatusBadRequest, err, ctx)
 	case errors.Is(err, model.ErrOrderIsCanceled), errors.Is(err, model.ErrOrderNotCancellable),
-		errors.Is(err, model.ErrOrderNotPaid), errors.Is(err, model.ErrOrderPaymentExpired):
+		errors.Is(err, model.ErrOrderNotPaid), errors.Is(err, model.ErrOrderPaymentExpired),
+		errors.Is(err, model.ErrOutOfStock), errors.Is(err, model.ErrNotEnoughStock):
 		responeError(http.StatusConflict, err, ctx)
 	default:
 		responeError(http.StatusInternalServerError, err, ctx)

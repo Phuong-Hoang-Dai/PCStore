@@ -28,6 +28,30 @@ export const createOrder = async (items: OrderItemRequest[]): Promise<number> =>
   return data["data"]["id"]
 }
 
+export type GuestOrderRequest = {
+  name: string;
+  email: string;
+  data: OrderItemRequest[];
+}
+
+// Orders without logging in; returns the Stripe checkout URL. The order goes to the account
+// with this email, which is created without a password if there is none.
+export const createGuestOrder = async (order: GuestOrderRequest): Promise<string> => {
+  const res = await fetch(url + "/order/guest", {
+    method: "POST",
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(order),
+  })
+  if (!res.ok){
+    throw new Error(await readError(res));
+  }
+
+  const data = await res.json()
+  return data["data"]["url"]
+}
+
 export const createCheckoutSession = async (orderId: number): Promise<string> => {
   const res = await fetch(url + "/payment/checkout/" + orderId, {
     method: "POST",

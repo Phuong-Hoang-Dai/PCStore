@@ -42,7 +42,7 @@ func Migrate(db *pgxpool.Pool) error {
 			id         SERIAL PRIMARY KEY,
 			name       VARCHAR(255) NOT NULL,
 			email      VARCHAR(255) NOT NULL DEFAULT '',
-			password   BYTEA NOT NULL,
+			password   BYTEA,
 			role       VARCHAR(50) NOT NULL DEFAULT 'user',
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -50,6 +50,9 @@ func Migrate(db *pgxpool.Pool) error {
 		);
 		CREATE INDEX IF NOT EXISTS idx_users_deleted_at ON users (deleted_at);
 		CREATE INDEX IF NOT EXISTS idx_users_name ON users (name);
+		-- Guest accounts (created by orders placed without logging in) have no password.
+		ALTER TABLE users ALTER COLUMN password DROP NOT NULL;
+		CREATE INDEX IF NOT EXISTS idx_users_email ON users (lower(email));
 	`)
 	return err
 }

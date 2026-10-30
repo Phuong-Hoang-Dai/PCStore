@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { AiOutlineLoading3Quarters } from "react-icons/ai";
 
-import { SignIn, SignUp, TryGetUserByCookie } from "./user_service";
+import { SignIn, SignUp, SignUpError, TryGetUserByCookie } from "./user_service";
 import { useDispatch } from "react-redux";
 import type { UserLogin } from "./user_model";
 import { SetUser } from "./userReducer";
@@ -41,9 +41,13 @@ const FormSignUp = ({ onSwitch }: { onSwitch?: () => void }) => {
       })
       .then(() => TryGetUserByCookie())
       .then((data) => dispatch(SetUser(data)))
-      .catch(() => {
+      .catch((err: Error) => {
         setIsPending(false);
-        setError("Đăng ký không thành công, vui lòng thử lại");
+        setError(
+          err instanceof SignUpError
+            ? err.message
+            : "Đăng ký không thành công, vui lòng thử lại"
+        );
       });
   };
 

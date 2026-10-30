@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Phuong-Hoang-Dai/DDStore/app/model/catalog"
@@ -32,6 +34,37 @@ func (p PaymentService) CreatePaymentInfo(orderId int, userId int, ctx context.C
 	}, ctx)
 
 	return id, err
+}
+
+// GuestCheckout places and checks out an order for someone who isn't logged in. The user
+// service returns the account using the guest's email, creating one without a password if
+// needed. Checkout happens right away because a guest has no session to pay with later.
+func (p PaymentService) GuestCheckout(guest GuestDTO, items []OrderDTO, ctx context.Context) (orderId int, url string, err error) {
+	if strings.TrimSpace(guest.Name) == "" || strings.TrimSpace(guest.Email) == "" {
+		return 0, "", model.ErrInvalidGuest
+	}
+
+	userId, err := p.UserService.GetOrCreateGuest(guest, ctx)
+	if err != nil {
+		return 0, "", err
+	}
+
+	orderId, err = p.OrderService.CreateOrder(userId, items, ctx)
+	if err != nil {
+		return 0, "", err
+	}
+
+	url, err = p.CreateCheckoutSession(orderId, ctx)
+	if err != nil {
+		// The guest can't retry checkout for this order, so release its stock now instead of
+		// leaving it reserved until the unpaid-order sweep.
+		if cancelErr := p.OrderService.CancelOrder(orderId, ctx); cancelErr != nil {
+			log.Printf("cancel guest order %d after failed checkout: %v", orderId, cancelErr)
+		}
+		return 0, "", err
+	}
+
+	return orderId, url, nil
 }
 
 func (p PaymentService) CreateCheckoutSession(orderId int, ctx context.Context) (url string, err error) {

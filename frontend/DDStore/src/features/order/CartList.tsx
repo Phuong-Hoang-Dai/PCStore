@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import { useNavigate } from "react-router-dom";
 import { changeByAmout, decrement, increment, selectCart } from "./cartSlice";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Mousewheel, Scrollbar } from "swiper/modules";
@@ -10,10 +11,11 @@ import { selectUser } from "../auth/userReducer";
 import { createCheckoutSession, createOrder } from "./order_service";
 import { formatVND } from "../../utils/format";
 
-const CartList = () => {
+const CartList = ({ onClose }: { onClose?: () => void }) => {
   const cartItem = useSelector(selectCart);
   const user = useSelector(selectUser);
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState("");
 
@@ -25,7 +27,9 @@ const CartList = () => {
       return;
     }
     if (!isLoggedIn) {
-      setError("Vui lòng đăng nhập để đặt hàng");
+      // Guests order with just a name and an email.
+      onClose?.();
+      navigate("/checkout");
       return;
     }
 

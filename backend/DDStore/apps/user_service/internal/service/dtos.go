@@ -39,7 +39,10 @@ type UserUpdateDTO struct {
 func MapUserCreateDTOtoUser(uD UserCreateDTO, u *model.User) {
 	u.Name = uD.Name
 	u.Email = uD.Email
-	u.SetHashPassword([]byte(uD.Password))
+	// No password means a guest account; hashing "" would make it log in with an empty password.
+	if uD.Password != "" {
+		u.SetHashPassword([]byte(uD.Password))
+	}
 }
 
 func MapUserUpdateDTOtoUser(uD UserUpdateDTO, u *model.User) {

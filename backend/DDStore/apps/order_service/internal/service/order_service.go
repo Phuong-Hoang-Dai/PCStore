@@ -33,6 +33,16 @@ func NewOrderService(repos OrderRepository, productSvc ProductService, stockSvc 
 }
 
 func (svc OrderService) CreateOrder(userId int, items []OrderDTO, ctx context.Context) (orderId int, err error) {
+	if len(items) == 0 {
+		return 0, model.ErrEmptyOrder
+	}
+	for _, item := range items {
+		// A negative quantity would add stock back and make the total negative.
+		if item.Quantity <= 0 {
+			return 0, model.ErrInvalidQuantity
+		}
+	}
+
 	if err := svc.productService.GetPriceProduct(&items); err != nil {
 		return 0, err
 	}

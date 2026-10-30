@@ -2,6 +2,7 @@ package repos
 
 import (
 	"context"
+	"errors"
 
 	"github.com/Phuong-Hoang-Dai/DDStore/app/user_service/internal/model"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/user_service/internal/service"
@@ -22,13 +23,73 @@ func NewPgUserRepo(db *pgxpool.Pool) service.UserRepos {
 const userColumns = `id, name, email, password, role, created_at, updated_at`
 
 func (m pgUserRepo) CreateUser(data *model.User, ctx context.Context) (int, error) {
-	err := m.DB.QueryRow(ctx,
-		`INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, $4)
-		RETURNING id, created_at, updated_at`,
-		data.Name, data.Email, data.HashedPassword, data.Role,
-	).Scan(&data.Id, &data.CreatedAt, &data.UpdatedAt)
+	err := pgx.BeginFunc(ctx, m.DB, func(tx pgx.Tx) error {
+		if data.Email != "" {
+			existing, found, err := findByEmail(ctx, tx, data.Email)
+			if err != nil {
+				return err
+			}
+			if found {
+				if existing.HashedPassword != nil {
+					return model.ErrEmailAlreadyRegistered
+				}
+				// A guest account: claim it, so its orders stay with the new login.
+				data.Id = existing.Id
+				return tx.QueryRow(ctx,
+					`UPDATE users SET name = $2, password = $3, updated_at = NOW() WHERE id = $1
+					RETURNING created_at, updated_at`,
+					data.Id, data.Name, data.HashedPassword,
+				).Scan(&data.CreatedAt, &data.UpdatedAt)
+			}
+		}
+
+		return tx.QueryRow(ctx,
+			`INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, $4)
+			RETURNING id, created_at, updated_at`,
+			data.Name, data.Email, data.HashedPassword, data.Role,
+		).Scan(&data.Id, &data.CreatedAt, &data.UpdatedAt)
+	})
 
 	return data.Id, err
+}
+
+func (m pgUserRepo) FindOrCreateGuest(data *model.User, ctx context.Context) (int, error) {
+	err := pgx.BeginFunc(ctx, m.DB, func(tx pgx.Tx) error {
+		existing, found, err := findByEmail(ctx, tx, data.Email)
+		if err != nil {
+			return err
+		}
+		if found {
+			*data = existing
+			return nil
+		}
+
+		// No password: the account can't log in until someone registers with this email.
+		return tx.QueryRow(ctx,
+			`INSERT INTO users (name, email, role) VALUES ($1, $2, $3)
+			RETURNING id, created_at, updated_at`,
+			data.Name, data.Email, data.Role,
+		).Scan(&data.Id, &data.CreatedAt, &data.UpdatedAt)
+	})
+
+	return data.Id, err
+}
+
+// findByEmail locks the email until the transaction ends, so concurrent requests can't both
+// create an account for it, then returns the account using it: a registered one if there is
+// one, otherwise the oldest guest account.
+func findByEmail(ctx context.Context, tx pgx.Tx, email string) (u model.User, found bool, err error) {
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext(lower($1)))`, email); err != nil {
+		return u, false, err
+	}
+
+	err = scanUser(tx.QueryRow(ctx,
+		`SELECT `+userColumns+` FROM users WHERE lower(email) = lower($1) AND deleted_at IS NULL
+		ORDER BY password IS NULL, id LIMIT 1`, email), &u)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return u, false, nil
+	}
+	return u, err == nil, err
 }
 
 // Empty fields are left unchanged.
@@ -63,9 +124,12 @@ func (m pgUserRepo) GetUserById(id int, data *model.User, ctx context.Context) e
 		`SELECT `+userColumns+` FROM users WHERE id = $1 AND deleted_at IS NULL`, id), data)
 }
 
+// GetUserByName is used for login, so it skips guest accounts: a guest who typed the same
+// name as a registered user must not shadow that user.
 func (m pgUserRepo) GetUserByName(name string, data *model.User, ctx context.Context) error {
 	return scanUser(m.DB.QueryRow(ctx,
-		`SELECT `+userColumns+` FROM users WHERE name = $1 AND deleted_at IS NULL ORDER BY id LIMIT 1`, name), data)
+		`SELECT `+userColumns+` FROM users WHERE name = $1 AND password IS NOT NULL AND deleted_at IS NULL
+		ORDER BY id LIMIT 1`, name), data)
 }
 
 // LIMIT NULLIF($1, 0): a limit of 0 means no limit (LIMIT NULL).

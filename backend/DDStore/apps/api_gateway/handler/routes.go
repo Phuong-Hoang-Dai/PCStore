@@ -32,7 +32,7 @@ func SetupHttp() {
 				user.GET("/logout", logout())
 				user.GET("/me", middleware.VerifyToken(), GetUserByToken(userAPIUrl))
 				user.GET("/refresh", RefreshToken())
-				user.POST("", createData(userAPIUrl))
+				user.POST("", signUp(userAPIUrl))
 				user.PUT("/:id", middleware.VerifyToken(), middleware.RequireRole("user", "admin", "owner"),
 					middleware.CheckIdForRoleUser(), updateDataById(userAPIUrl))
 				user.GET("", getDatas(userAPIUrl))
@@ -67,6 +67,9 @@ func SetupHttp() {
 				order.PUT("/:id", middleware.RequireRole("admin", "owner"), updateDataById(orderAPIUrl))
 				order.DELETE("/:id", middleware.RequireRole("admin", "owner"), deleteDataById(orderAPIUrl))
 			}
+			// No login: order_service gets (or creates) the account for the guest's email and
+			// returns the Stripe checkout URL along with the order id.
+			v1.POST("/order/guest", createData(orderAPIUrl+"/guest"))
 			payment := v1.Group("/payment", middleware.VerifyToken())
 			{
 				// completeOrderById forwards POST {baseUrl}/:id with an empty body, which is all checkout needs.

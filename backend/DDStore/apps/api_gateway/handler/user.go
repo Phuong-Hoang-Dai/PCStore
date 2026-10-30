@@ -14,6 +14,35 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// signUp forwards a registration. user_service treats a user without a password as a guest
+// (an account for orders placed without logging in), which only order_service may create, so
+// a public sign-up must have one.
+func signUp(baseUrl string) func(ctx *gin.Context) {
+	return func(ctx *gin.Context) {
+		body, err := io.ReadAll(ctx.Request.Body)
+		if err != nil {
+			responeError(http.StatusBadRequest, Err.ErrCannotReadBody, ctx)
+			return
+		}
+
+		var data struct {
+			Password string `json:"password"`
+		}
+		if err := json.Unmarshal(body, &data); err != nil || data.Password == "" {
+			responeError(http.StatusBadRequest, Err.ErrPasswordRequired, ctx)
+			return
+		}
+
+		bodyData, statusCode, err := makeRequest(http.MethodPost, baseUrl, bytes.NewBuffer(body))
+		if err != nil {
+			responeError(statusCode, err, ctx)
+			return
+		}
+
+		ctx.JSON(statusCode, bodyData)
+	}
+}
+
 func login(baseUrl string) func(ctx *gin.Context) {
 	return func(ctx *gin.Context) {
 		body, err := io.ReadAll(ctx.Request.Body)

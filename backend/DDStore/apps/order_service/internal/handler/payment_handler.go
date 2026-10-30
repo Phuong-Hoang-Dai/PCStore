@@ -96,6 +96,39 @@ func (p PaymentHandler) StripeWebhook() func(ctx *gin.Context) {
 	}
 }
 
+// GuestCheckout places an order for a customer who isn't logged in and returns the order id
+// and its Stripe checkout URL.
+func (p PaymentHandler) GuestCheckout() func(ctx *gin.Context) {
+	return func(ctx *gin.Context) {
+		bodyData := struct {
+			Name  string             `json:"name"`
+			Email string             `json:"email"`
+			Data  []service.OrderDTO `json:"data"`
+		}{}
+
+		if err := ctx.ShouldBind(&bodyData); err != nil {
+			responeError(http.StatusBadRequest, err, ctx)
+			return
+		}
+
+		guest := service.GuestDTO{Name: bodyData.Name, Email: bodyData.Email}
+		id, url, err := p.paymentService.GuestCheckout(guest, bodyData.Data, ctx)
+		if err != nil {
+			responeOrderError(err, ctx)
+			return
+		}
+
+		ctx.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": "Create Order succesfully",
+			"data": gin.H{
+				"id":  id,
+				"url": url,
+			},
+		})
+	}
+}
+
 func (p PaymentHandler) CreatePaymentInfo() func(ctx *gin.Context) {
 	return func(ctx *gin.Context) {
 		orderId, err := strconv.Atoi(ctx.Param("id"))
