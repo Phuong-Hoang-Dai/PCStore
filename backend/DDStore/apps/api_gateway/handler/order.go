@@ -1,97 +1,52 @@
 package handler
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
-	"strconv"
 
 	Err "github.com/Phuong-Hoang-Dai/DDStore/api_gateway/constant"
 	"github.com/gin-gonic/gin"
 )
 
-func completeOrderById(baseUrl string) func(ctx *gin.Context) {
-	return func(ctx *gin.Context) {
-		id, err := strconv.Atoi(ctx.Param("id"))
-		if err != nil {
-			responeError(http.StatusBadRequest, err, ctx)
-			return
-		}
-		bodyData, statusCode, err := makeRequest(http.MethodPost, fmt.Sprintf("%s/%d", baseUrl, id), bytes.NewBuffer([]byte{}))
-		if err != nil {
-			responeError(statusCode, err, ctx)
-			return
-		}
-
-		ctx.JSON(statusCode, bodyData)
-	}
-}
-
 // getOrderById lets admins read any order but users only their own. The owner is only
 // known once the order is fetched, so the check can't be a middleware on the URL id.
-func getOrderById(baseUrl string) func(ctx *gin.Context) {
+func getOrderById() func(ctx *gin.Context) {
 	return func(ctx *gin.Context) {
-		id := url.PathEscape(ctx.Param("id"))
-		bodyData, statusCode, err := makeRequest(http.MethodGet, fmt.Sprintf("%s/%s", baseUrl, id), bytes.NewBuffer([]byte{}))
+		target := orderService.String() + "/order/" + url.PathEscape(ctx.Param("id"))
+		statusCode, body, err := fetch(ctx, http.MethodGet, target, nil)
 		if err != nil {
-			responeError(statusCode, err, ctx)
+			responeError(http.StatusBadGateway, err, ctx)
 			return
 		}
 
 		if statusCode == http.StatusOK && ctx.GetString("role") == "user" {
-			var order struct {
-				UserId int `json:"userId"`
+			var resp struct {
+				Data struct {
+					UserId int `json:"userId"`
+				} `json:"data"`
 			}
-			if err := json.Unmarshal(bodyData["data"], &order); err != nil || order.UserId != ctx.GetInt("id") {
+			if err := json.Unmarshal(body, &resp); err != nil || resp.Data.UserId != ctx.GetInt("id") {
 				responeError(http.StatusForbidden, Err.ErrNotAllowToAccess, ctx)
 				return
 			}
 		}
 
-		ctx.JSON(statusCode, bodyData)
+		ctx.Data(statusCode, "application/json; charset=utf-8", body)
 	}
 }
 
-func createOrder(baseUrl string) func(ctx *gin.Context) {
+// createOrder places the order for the logged-in user.
+func createOrder() func(ctx *gin.Context) {
 	return func(ctx *gin.Context) {
-		body, err := io.ReadAll(ctx.Request.Body)
-		if err != nil {
-			responeError(http.StatusBadRequest, Err.ErrCannotReadBody, ctx)
-		}
-		id := ctx.GetInt("id")
-		bodyData, statusCode, err := makeRequest(http.MethodPost, fmt.Sprintf("%s/%d", baseUrl, id), bytes.NewBuffer(body))
-		if err != nil {
-			responeError(statusCode, err, ctx)
-			return
-		}
-
-		ctx.JSON(statusCode, bodyData)
+		forward(ctx, orderService, fmt.Sprintf("/order/%d", ctx.GetInt("id")), ctx.Request.URL.RawQuery)
 	}
 }
 
-func getHistoryOrderById(baseUrl string) func(ctx *gin.Context) {
+// getHistoryOrderById lists the logged-in user's orders.
+func getHistoryOrderById() func(ctx *gin.Context) {
 	return func(ctx *gin.Context) {
-		id := ctx.GetInt("id")
-		limit, err := strconv.Atoi(ctx.DefaultQuery("limit", "0"))
-		if err != nil {
-			responeError(http.StatusBadRequest, err, ctx)
-			return
-		}
-		offset, err := strconv.Atoi(ctx.DefaultQuery("offset", "0"))
-		if err != nil {
-			responeError(http.StatusBadRequest, err, ctx)
-			return
-		}
-		bodyData, statusCode, err := makeRequest(http.MethodGet, fmt.Sprintf("%s/%d?limit=%d&offset=%d", baseUrl, id, limit, offset), bytes.NewBuffer([]byte{}))
-
-		if err != nil {
-			responeError(statusCode, err, ctx)
-			return
-		}
-
-		ctx.JSON(statusCode, bodyData)
+		forward(ctx, orderService, fmt.Sprintf("/order/history/%d", ctx.GetInt("id")), pagingQuery(ctx))
 	}
 }

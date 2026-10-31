@@ -18,10 +18,19 @@ type OrderRepository interface {
 }
 
 type StockRepository interface {
-	ReserveStock(productId string, qnantity int, orderId int, ctx context.Context) error
+	ReserveStock(productId string, qnantity int, orderId int, ctx context.Context) (remaining int, err error)
 	ReleaseStock(orderId int, ctx context.Context) (restocked []string, err error)
 	AddStock(productId string, quantity int, ctx context.Context) (int, error)
 	GetStocks(productIds []string, ctx context.Context) ([]model.Stock, error)
+}
+
+// StockCache holds the last known quantity of products an order found short, so later
+// orders asking for more can be refused before the catalog and the database are called.
+type StockCache interface {
+	Set(productId string, quantity int, ctx context.Context) error
+	Delete(productIds []string, ctx context.Context) error
+	// Get returns the cached quantities of productIds; ids that aren't cached are left out.
+	Get(productIds []string, ctx context.Context) (map[string]int, error)
 }
 
 type SequenecerRepository interface {

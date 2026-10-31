@@ -2,6 +2,9 @@
 # With search:  docker compose --profile search up --build
 # Metrics:      docker compose --profile monitoring up -d  -> http://localhost:3000 (Grafana),
 #               http://localhost:9090 (Prometheus)
+# DB UIs:       http://localhost:5050 (pgAdmin), http://localhost:8081 (mongo-express),
+#               http://localhost:5601 (Kibana); MongoDB Compass: mongodb://127.0.0.1:27018
+# Logs:         Kibana > Discover > "DDStore logs"; search transaction_id : "<X-Transaction-Id>"
 # Secrets (JWT, Stripe) come from .env next to this file; see .env.example.
 name: ddstore
 
@@ -13,6 +16,10 @@ services:
     mongo:
         image: mongo:7
         restart: unless-stopped
+        ports:
+            # For MongoDB Compass: mongodb://127.0.0.1:27018/?directConnection=true. Not 27017,
+            # which the MongoDB installed on Windows uses. Only this machine can reach it (no auth).
+            - "127.0.0.1:27018:27017"
         volumes:
             - mongo-data:/data/db
         healthcheck:
@@ -39,7 +46,7 @@ services:
             RABBITMQ_DEFAULT_USER: ddstore
             RABBITMQ_DEFAULT_PASS: ddstore
         ports:
-            - "127.0.0.1:15672:15672" # management UI
+            - "15672:15672" # management UI
         volumes:
             - rabbitmq-data:/var/lib/rabbitmq
         healthcheck:
@@ -67,7 +74,6 @@ services:
 
     elasticsearch:
         image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
-        profiles: ["search"]
         restart: unless-stopped
         environment:
             discovery.type: single-node
@@ -83,11 +89,12 @@ services:
 
     # ---------- services ----------
     user_service:
-        <<: *go-service
         build: ./apps/user_service
         environment:
             APP_NAME: "DDStore"
             GIN_MODE: release
+            # 2: also log each service function's input and output; 1: only requests and queue messages.
+            LOG_LEVEL: "2"
             DB_CONN_STR: "postgres://ddstore:ddstore@postgres:5432/ddstore_users?sslmode=disable"
         depends_on:
             postgres:
@@ -95,11 +102,11 @@ services:
 
     # The code lives in apps/catalog_service; the gateway and order_service call it by this name.
     product_service:
-        <<: *go-service
         build: ./apps/catalog_service
         environment:
             APP_NAME: "DDStore"
             GIN_MODE: release
+            LOG_LEVEL: "2"
             MONGO_URI: "mongodb://mongo:27017"
             DB_NAME: "ddstore"
             REDIS_ADDR: "redis://redis:6379"
@@ -117,23 +124,26 @@ services:
                 condition: service_healthy
 
     order_service:
-        <<: *go-service
         build:
             context: ./apps
             dockerfile: order_service/Dockerfile
         environment:
             APP_NAME: "DDStore"
             GIN_MODE: release
+            LOG_LEVEL: "2"
             DB_CONN_STR: "postgres://ddstore:ddstore@postgres:5432/ddstore_orders?sslmode=disable"
-            STRIPE_SECRET_KEY: "sk_test_51USFbjQ4KdlzZGnoo4NDNFp5cXgS67lCH6sF4uaw3k9LJ0jOaxQf41bh8T5JmC8bCaq2e1KuFHtcxoAt4rksdnvM00BTCEOSpt"
-            STRIPE_WEBHOOK_SECRET: "whsec_BU1rICYCcYVDzb5cSelr13EHEVQnMcV9"
+            REDIS_ADDR: "redis://redis:6379"
+            STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+            STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
             STRIPE_SUCCESS_URL: "http://localhost:5173/payment/success"
             STRIPE_CANCEL_URL: "http://localhost:5173/payment/cancel"
         ports:
             # Only for Stripe webhooks: stripe listen --forward-to localhost:7777/payment/webhook
-            - "127.0.0.1:7777:7777"
+            - "7777:7777"
         depends_on:
             postgres:
+                condition: service_healthy
+            redis:
                 condition: service_healthy
             product_service:
                 condition: service_started
@@ -141,11 +151,11 @@ services:
                 condition: service_started
 
     api_gateway:
-        <<: *go-service
         build: ./apps/api_gateway
         environment:
             APP_NAME: "DDStore"
             GIN_MODE: release
+            LOG_LEVEL: "2"
             JWT_SECRET: ${JWT_SECRET:-change-me}
             JWT_EXPIRES_IN: "12h"
             JWT_RefreshToken_EXPIRES_IN: "30d"
@@ -164,12 +174,11 @@ services:
                 condition: service_started
 
     search_service:
-        <<: *go-service
-        profiles: ["search"]
         build: ./apps/search_service
         environment:
             APP_NAME: "DDStore Search"
             GIN_MODE: release
+            LOG_LEVEL: "2"
             PORT: "8889"
             ES_ADDRESSES: "http://elasticsearch:9200"
             ES_INDEX: "products"
@@ -199,31 +208,58 @@ services:
     # The URL is in its logs and at http://localhost:4040 (request inspector).
     ngrok:
         image: ngrok/ngrok:3.39.13-alpine
-        profiles: ["tunnel"]
         restart: unless-stopped
         # Empty NGROK_URL lets ngrok pick the account's default dev domain.
         command: ["http", "order_service:7777", "--log", "stdout"]
         environment:
-            NGROK_AUTHTOKEN: "3LKihg5XzxrqdgerdRqML6sQ9k5_4ov4CSi7vi3WmbB55uQDC"
+            NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
         ports:
-            - "127.0.0.1:4040:4040"
+            - "4040:4040"
 
     # Scrapes every service's /metrics (internal port 2112) and RabbitMQ; config in deploy/prometheus.
     prometheus:
         image: prom/prometheus:v3.15.1
-        profiles: ["monitoring"]
         restart: unless-stopped
         volumes:
             - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
             - prometheus-data:/prometheus
         ports:
-            - "127.0.0.1:9090:9090"
+            - "9090:9090"
+
+    # DB exporters for the "DDStore Databases" dashboard; Prometheus scrapes them over the compose
+    # network. postgres_exporter probes each database separately (deploy/postgres-exporter).
+    postgres_exporter:
+        image: prometheuscommunity/postgres-exporter:v0.20.1
+        restart: unless-stopped
+        command: ["--config.file=/etc/postgres_exporter/postgres_exporter.yml"]
+        volumes:
+            - ./deploy/postgres-exporter/postgres_exporter.yml:/etc/postgres_exporter/postgres_exporter.yml:ro
+        depends_on:
+            postgres:
+                condition: service_healthy
+
+    mongodb_exporter:
+        image: percona/mongodb_exporter:0.54.0
+        restart: unless-stopped
+        # --discovering-mode finds the collections for the per-collection stats.
+        command: ["--mongodb.uri=mongodb://mongo:27017", "--collect-all", "--discovering-mode", "--compatible-mode"]
+        depends_on:
+            mongo:
+                condition: service_healthy
+
+    redis_exporter:
+        image: oliver006/redis_exporter:v1.96.0-alpine
+        restart: unless-stopped
+        environment:
+            REDIS_ADDR: "redis://redis:6379"
+        depends_on:
+            redis:
+                condition: service_healthy
 
     # Dashboards on top of Prometheus (admin / admin on first login). The data source and the
     # "DDStore Overview" dashboard are provisioned from deploy/grafana.
     grafana:
         image: grafana/grafana:13.2.5
-        profiles: ["monitoring"]
         restart: unless-stopped
         environment:
             GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/dashboards/ddstore-overview.json
@@ -233,9 +269,84 @@ services:
             - ./deploy/grafana/dashboards:/etc/grafana/dashboards:ro
             - grafana-data:/var/lib/grafana
         ports:
-            - "127.0.0.1:3000:3000"
+            - "3000:3000"
         depends_on:
             - prometheus
+
+    # Postgres UI (admin@ddstore.com / ddstore). The server is registered from deploy/pgadmin on
+    # the first start only; its password is ddstore.
+    pgadmin:
+        image: dpage/pgadmin4:9.19.0
+        restart: unless-stopped
+        environment:
+            PGADMIN_DEFAULT_EMAIL: admin@ddstore.com
+            PGADMIN_DEFAULT_PASSWORD: ddstore
+            # Lets "Save password" work without a separate master password.
+            PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+        volumes:
+            - ./deploy/pgadmin/servers.json:/pgadmin4/servers.json:ro
+            - pgadmin-data:/var/lib/pgadmin
+        ports:
+            - "5050:80"
+        depends_on:
+            postgres:
+                condition: service_healthy
+
+    # Mongo UI in the browser (admin / ddstore).
+    mongo_express:
+        image: mongo-express:1.0.2-20-alpine3.19
+        restart: unless-stopped
+        environment:
+            ME_CONFIG_MONGODB_URL: "mongodb://mongo:27017"
+            ME_CONFIG_BASICAUTH: "true"
+            ME_CONFIG_BASICAUTH_USERNAME: admin
+            ME_CONFIG_BASICAUTH_PASSWORD: ddstore
+        ports:
+            - "8081:8081"
+        depends_on:
+            mongo:
+                condition: service_healthy
+
+    # Elasticsearch UI; must be the same version as elasticsearch. No login, as security is off.
+    kibana:
+        image: docker.elastic.co/kibana/kibana:8.15.0
+        restart: unless-stopped
+        environment:
+            ELASTICSEARCH_HOSTS: '["http://elasticsearch:9200"]'
+        ports:
+            - "5601:5601"
+        depends_on:
+            elasticsearch:
+                condition: service_healthy
+
+    # Ships the Go services' JSON logs to Elasticsearch (deploy/filebeat). It reads the
+    # containers' log files and asks Docker which container is which, so it runs as root.
+    filebeat:
+        image: docker.elastic.co/beats/filebeat:8.15.0
+        restart: unless-stopped
+        user: root
+        # strict.perms=false: Docker Desktop mounts the config world-writable, which Filebeat refuses.
+        # -e: Filebeat's own log goes to docker compose logs instead of a file in the container.
+        command: ["-environment", "container", "--strict.perms=false", "-e"]
+        volumes:
+            - ./deploy/filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+            - ./deploy/filebeat/index-template.json:/usr/share/filebeat/index-template.json:ro
+            - /var/lib/docker/containers:/var/lib/docker/containers:ro
+            - /var/run/docker.sock:/var/run/docker.sock:ro
+            - filebeat-data:/usr/share/filebeat/data
+        depends_on:
+            elasticsearch:
+                condition: service_healthy
+
+    # Creates the "DDStore logs" data view and saved search in Kibana, then exits.
+    kibana_setup:
+        image: curlimages/curl:8.23.0
+        restart: "no"
+        command: ["sh", "/setup.sh"]
+        volumes:
+            - ./deploy/kibana/setup.sh:/setup.sh:ro
+        depends_on:
+            - kibana
 
 volumes:
     mongo-data:
@@ -244,3 +355,5 @@ volumes:
     es-data:
     prometheus-data:
     grafana-data:
+    pgadmin-data:
+    filebeat-data:

@@ -21,9 +21,9 @@ func NewPgStockRepo(db *pgxpool.Pool) service.StockRepository {
 }
 
 // ReserveStock takes quantity out of stock for the order and returns what is left.
-func (p pgStockRepo) ReserveStock(productId string, quantity int, orderId int, ctx context.Context) (err error) {
-	remaining := -1
-
+// ErrOutOfStock means the reservation was made and took the last units.
+// ErrNotEnoughStock comes with the quantity in stock, which was left untouched.
+func (p pgStockRepo) ReserveStock(productId string, quantity int, orderId int, ctx context.Context) (remaining int, err error) {
 	err = pgx.BeginFunc(ctx, p.DB, func(tx pgx.Tx) (err error) {
 		stockId := 0
 		err = tx.QueryRow(ctx,
@@ -45,15 +45,24 @@ func (p pgStockRepo) ReserveStock(productId string, quantity int, orderId int, c
 		return nil
 	})
 
-	if remaining == 0 {
-		return model.ErrOutOfStock
-	}
-
 	if errors.Is(err, pgx.ErrNoRows) {
-		return model.ErrNotEnoughStock
+		// A product without a stock row has none.
+		err = p.DB.QueryRow(ctx,
+			`SELECT quantity FROM stock WHERE product_id = $1 AND deleted_at IS NULL`, productId,
+		).Scan(&remaining)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return 0, err
+		}
+		return remaining, model.ErrNotEnoughStock
+	}
+	if err != nil {
+		return 0, err
 	}
 
-	return err
+	if remaining == 0 {
+		return 0, model.ErrOutOfStock
+	}
+	return remaining, nil
 }
 
 // ReleaseStock returns every active reservation of the order to stock and returns the

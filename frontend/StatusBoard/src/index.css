@@ -1,0 +1,43 @@
+@import "tailwindcss";
+
+/* Surfaces and ink switch with the OS theme; the status colors are the same in both. */
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #898781;
+  --line: #e1e0d9;
+  --edge: rgba(11, 11, 11, 0.1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --ink: #f0efec;
+    --ink-2: #c3c2b7;
+    --line: #2c2c2a;
+    --edge: rgba(255, 255, 255, 0.1);
+  }
+}
+
+@theme inline {
+  --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --color-page: var(--page);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-edge: var(--edge);
+  /* Only ever shown next to an icon and a label, never as the sole cue. */
+  --color-good: #0ca30c;
+  --color-critical: #d03b3b;
+}
+
+body {
+  @apply bg-page text-ink font-sans antialiased;
+}

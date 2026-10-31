@@ -10,6 +10,7 @@ import (
 
 	"github.com/Azure/go-amqp"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/search_service/configs"
+	"github.com/Phuong-Hoang-Dai/DDStore/app/search_service/internal/logger"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/search_service/internal/model"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/search_service/internal/service"
 	rmq "github.com/rabbitmq/rabbitmq-amqp-go-client/pkg/rabbitmqamqp"
@@ -69,6 +70,8 @@ func (c ProductIndexConsumer) Run(ctx context.Context) error {
 }
 
 func (c ProductIndexConsumer) handle(ctx context.Context, delivery rmq.IDeliveryContext) {
+	// msgCtx carries the transaction id of the request that changed the product.
+	msgCtx, done := logger.Received(ctx, configs.Cfg.ProductIndexQueue, delivery)
 	var body []byte
 	if data := delivery.Message().Data; len(data) > 0 {
 		body = data[0]
@@ -76,8 +79,8 @@ func (c ProductIndexConsumer) handle(ctx context.Context, delivery rmq.IDelivery
 
 	var event productIndexEvent
 	if err := json.Unmarshal(body, &event); err != nil || event.Id == "" {
-		log.Printf("Discarding malformed index event: %s", body)
 		delivery.Discard(ctx, &amqp.Error{Condition: amqp.ErrCondDecodeError})
+		done("discarded", fmt.Errorf("malformed index event: %v", err))
 		return
 	}
 
@@ -85,24 +88,24 @@ func (c ProductIndexConsumer) handle(ctx context.Context, delivery rmq.IDelivery
 	switch {
 	case event.Action == "upsert" && event.Product != nil:
 		event.Product.Id = event.Id
-		_, err = c.service.IndexProduct(ctx, *event.Product)
+		_, err = c.service.IndexProduct(msgCtx, *event.Product)
 	case event.Action == "delete":
-		err = c.service.DeleteProduct(ctx, event.Id)
+		err = c.service.DeleteProduct(msgCtx, event.Id)
 	default:
-		log.Printf("Discarding index event with unknown action %q", event.Action)
 		delivery.Discard(ctx, &amqp.Error{Condition: amqp.ErrCondNotImplemented})
+		done("discarded", fmt.Errorf("unknown action %q", event.Action))
 		return
 	}
 
 	if err != nil {
-		log.Printf("Failed to %s product %s, retrying: %v", event.Action, event.Id, err)
 		time.Sleep(retryDelay)
 		delivery.Requeue(ctx)
+		done("requeued", err)
 		return
 	}
 
 	if err := delivery.Accept(ctx); err != nil {
 		log.Printf("Failed to accept message: %v", err)
 	}
-	log.Printf("Indexed: %s %s", event.Action, event.Id)
+	done("accepted", nil)
 }

@@ -17,7 +17,7 @@ import (
 // signUp forwards a registration. user_service treats a user without a password as a guest
 // (an account for orders placed without logging in), which only order_service may create, so
 // a public sign-up must have one.
-func signUp(baseUrl string) func(ctx *gin.Context) {
+func signUp() func(ctx *gin.Context) {
 	return func(ctx *gin.Context) {
 		body, err := io.ReadAll(ctx.Request.Body)
 		if err != nil {
@@ -33,40 +33,34 @@ func signUp(baseUrl string) func(ctx *gin.Context) {
 			return
 		}
 
-		bodyData, statusCode, err := makeRequest(http.MethodPost, baseUrl, bytes.NewBuffer(body))
-		if err != nil {
-			responeError(statusCode, err, ctx)
-			return
-		}
-
-		ctx.JSON(statusCode, bodyData)
+		// Read above, so it is put back for the service.
+		ctx.Request.Body = io.NopCloser(bytes.NewReader(body))
+		forwardTo(userService)(ctx)
 	}
 }
 
-func login(baseUrl string) func(ctx *gin.Context) {
+// login checks the password with user_service and, if it is right, sets the token cookies.
+func login() func(ctx *gin.Context) {
 	return func(ctx *gin.Context) {
-		body, err := io.ReadAll(ctx.Request.Body)
+		statusCode, body, err := fetch(ctx, http.MethodPost, userService.String()+"/user/verifyPassword", ctx.Request.Body)
 		if err != nil {
-			responeError(http.StatusBadRequest, Err.ErrCannotReadBody, ctx)
-			return
-		}
-
-		bodyData, statusCode, err := makeRequest(http.MethodPost, fmt.Sprint(baseUrl, "/verifyPassword"), bytes.NewBuffer(body))
-		if err != nil {
-			responeError(statusCode, err, ctx)
+			responeError(http.StatusBadGateway, err, ctx)
 			return
 		}
 
 		if statusCode != http.StatusOK {
-			ctx.JSON(statusCode, bodyData)
+			ctx.Data(statusCode, "application/json; charset=utf-8", body)
 			return
 		}
 
-		data := model.UseResp{}
-		if err := json.Unmarshal(bodyData["data"], &data); err != nil {
+		var resp struct {
+			Data model.UseResp `json:"data"`
+		}
+		if err := json.Unmarshal(body, &resp); err != nil {
 			responeError(http.StatusInternalServerError, Err.ErrCannotReadBody, ctx)
 			return
 		}
+		data := resp.Data
 
 		var access_token, refresh_token string
 		if access_token, err = utils.GenerateJwt(data, configs.Cfg.AccessTokenExpireIn); err != nil {
@@ -154,16 +148,9 @@ func logout() func(ctx *gin.Context) {
 	}
 }
 
-func GetUserByToken(baseUrl string) gin.HandlerFunc {
+// GetUserByToken forwards to the logged-in user's own record.
+func GetUserByToken() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		userId := ctx.GetInt("id")
-
-		bodyData, statusCode, err := makeRequest(http.MethodGet, fmt.Sprintf("%s/%d", baseUrl, userId), bytes.NewBuffer([]byte{}))
-		if err != nil {
-			responeError(statusCode, err, ctx)
-			return
-		}
-
-		ctx.JSON(statusCode, bodyData)
+		forward(ctx, userService, fmt.Sprintf("/user/%d", ctx.GetInt("id")), "")
 	}
 }

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Phuong-Hoang-Dai/DDStore/app/product_service/internal/logger"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/product_service/internal/model"
 	"github.com/redis/go-redis/v9"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -34,7 +35,8 @@ func NewProductService(repos ProductRepos, categories CateRepos, redis *redis.Cl
 	}
 }
 
-func (service productManager) CreateProduct(ctx context.Context, data model.Product) (bson.ObjectID, error) {
+func (service productManager) CreateProduct(ctx context.Context, data model.Product) (id bson.ObjectID, err error) {
+	defer logger.Trace(ctx, "ProductService.CreateProduct", data)(&id, &err)
 	if err := service.prepareProduct(ctx, &data); err != nil {
 		return bson.NilObjectID, err
 	}
@@ -44,7 +46,7 @@ func (service productManager) CreateProduct(ctx context.Context, data model.Prod
 	// A new product has no stock yet; order_service marks it available once stock is added.
 	data.State = model.OutOfStock
 
-	id, err := service.repository.CreateProduct(ctx, data)
+	id, err = service.repository.CreateProduct(ctx, data)
 	if err != nil {
 		return bson.NilObjectID, err
 	}
@@ -54,7 +56,8 @@ func (service productManager) CreateProduct(ctx context.Context, data model.Prod
 	return id, nil
 }
 
-func (service productManager) UpdateProduct(ctx context.Context, data model.Product) error {
+func (service productManager) UpdateProduct(ctx context.Context, data model.Product) (err error) {
+	defer logger.Trace(ctx, "ProductService.UpdateProduct", data)(&err)
 	if err := service.prepareProduct(ctx, &data); err != nil {
 		return err
 	}
@@ -68,7 +71,8 @@ func (service productManager) UpdateProduct(ctx context.Context, data model.Prod
 	return nil
 }
 
-func (service productManager) UpdateProductState(ctx context.Context, id bson.ObjectID, state model.ProductState) error {
+func (service productManager) UpdateProductState(ctx context.Context, id bson.ObjectID, state model.ProductState) (err error) {
+	defer logger.Trace(ctx, "ProductService.UpdateProductState", id, state)(&err)
 	if state != model.IsAvailable && state != model.OutOfStock {
 		return model.ErrInvalidState
 	}
@@ -83,6 +87,7 @@ func (service productManager) UpdateProductState(ctx context.Context, id bson.Ob
 }
 
 func (service productManager) GetProducts(ctx context.Context, p *model.Paging) (products []model.Product, err error) {
+	defer logger.Trace(ctx, "ProductService.GetProducts", p)(&products, &err)
 	cacheKey := fmt.Sprintf("products:%v-%v", p.Limit, p.Offset)
 
 	data, err := service.rdb.Get(ctx, cacheKey).Bytes()
@@ -107,6 +112,7 @@ func (service productManager) GetProducts(ctx context.Context, p *model.Paging) 
 }
 
 func (service productManager) GetProductsByCate(ctx context.Context, p *model.Paging, cateId int) (products []model.Product, err error) {
+	defer logger.Trace(ctx, "ProductService.GetProductsByCate", p, cateId)(&products, &err)
 	cacheKey := fmt.Sprintf("productsByCate:%v-%v-%v", p.Limit, p.Offset, cateId)
 
 	data, err := service.rdb.Get(ctx, cacheKey).Bytes()
@@ -131,6 +137,7 @@ func (service productManager) GetProductsByCate(ctx context.Context, p *model.Pa
 }
 
 func (service productManager) GetProductById(ctx context.Context, id bson.ObjectID) (product model.Product, err error) {
+	defer logger.Trace(ctx, "ProductService.GetProductById", id)(&product, &err)
 	cacheKey := productCacheKey(id)
 
 	data, err := service.rdb.Get(ctx, cacheKey).Bytes()
@@ -153,7 +160,8 @@ func (service productManager) GetProductById(ctx context.Context, id bson.Object
 	return product, nil
 }
 
-func (service productManager) DeleteProduct(ctx context.Context, id bson.ObjectID) error {
+func (service productManager) DeleteProduct(ctx context.Context, id bson.ObjectID) (err error) {
+	defer logger.Trace(ctx, "ProductService.DeleteProduct", id)(&err)
 	if err := service.repository.DeleteProduct(ctx, id); err != nil {
 		return err
 	}
@@ -165,11 +173,13 @@ func (service productManager) DeleteProduct(ctx context.Context, id bson.ObjectI
 	return nil
 }
 
-func (service productManager) GetProductsByIds(ctx context.Context, ids []bson.ObjectID) ([]model.Product, error) {
+func (service productManager) GetProductsByIds(ctx context.Context, ids []bson.ObjectID) (products []model.Product, err error) {
+	defer logger.Trace(ctx, "ProductService.GetProductsByIds", ids)(&products, &err)
 	return service.repository.GetProductsByIds(ctx, ids)
 }
 
-func (service productManager) GetPrices(ctx context.Context, items []OrderItemsDto) ([]OrderItemsDto, error) {
+func (service productManager) GetPrices(ctx context.Context, items []OrderItemsDto) (priced []OrderItemsDto, err error) {
+	defer logger.Trace(ctx, "ProductService.GetPrices", items)(&priced, &err)
 	ids := make([]bson.ObjectID, len(items))
 	for i := range items {
 		id, err := bson.ObjectIDFromHex(items[i].ProductId)

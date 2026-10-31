@@ -5,6 +5,7 @@ import (
 	"net/mail"
 	"strings"
 
+	"github.com/Phuong-Hoang-Dai/DDStore/app/user_service/internal/logger"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/user_service/internal/model"
 )
 
@@ -13,7 +14,8 @@ import (
 //     that guest account is claimed (it gets the name and password and keeps its orders)
 //   - without one, it is a guest placing an order: the account already using the email is
 //     returned, or one is created without a password, which can't log in until registered
-func CreateUser(uD UserCreateDTO, repos UserRepos, ctx context.Context) (int, error) {
+func CreateUser(uD UserCreateDTO, repos UserRepos, ctx context.Context) (id int, err error) {
+	defer logger.Trace(ctx, "UserService.CreateUser", uD)(&id, &err)
 	uD.Email = strings.ToLower(strings.TrimSpace(uD.Email))
 	isGuest := uD.Password == ""
 	if isGuest {
@@ -47,6 +49,7 @@ func isValidEmail(email string) bool {
 }
 
 func GetUserById(id int, repos UserRepos, ctx context.Context) (u UserResponeDTO, err error) {
+	defer logger.Trace(ctx, "UserService.GetUserById", id)(&u, &err)
 	var userDAO model.User
 
 	if err := repos.GetUserById(id, &userDAO, ctx); err != nil {
@@ -57,7 +60,8 @@ func GetUserById(id int, repos UserRepos, ctx context.Context) (u UserResponeDTO
 	}
 }
 
-func UpdateUser(uD UserUpdateDTO, repos UserRepos, ctx context.Context) error {
+func UpdateUser(uD UserUpdateDTO, repos UserRepos, ctx context.Context) (err error) {
+	defer logger.Trace(ctx, "UserService.UpdateUser", uD)(&err)
 	var u model.User
 	MapUserUpdateDTOtoUser(uD, &u)
 
@@ -68,7 +72,8 @@ func UpdateUser(uD UserUpdateDTO, repos UserRepos, ctx context.Context) error {
 	}
 }
 
-func DeleteUser(id int, repos UserRepos, ctx context.Context) error {
+func DeleteUser(id int, repos UserRepos, ctx context.Context) (err error) {
+	defer logger.Trace(ctx, "UserService.DeleteUser", id)(&err)
 	if err := repos.DeleteUser(id, ctx); err != nil {
 		return err
 	} else {
@@ -76,13 +81,14 @@ func DeleteUser(id int, repos UserRepos, ctx context.Context) error {
 	}
 }
 
-func GetUsers(p *model.Paging, repos UserRepos, ctx context.Context) ([]UserResponeDTO, error) {
+func GetUsers(p *model.Paging, repos UserRepos, ctx context.Context) (data []UserResponeDTO, err error) {
+	defer logger.Trace(ctx, "UserService.GetUsers", p)(&data, &err)
 	p.Process()
 	var userDAO []model.User
 	if err := repos.GetUsers(*p, &userDAO, ctx); err != nil {
 		return nil, err
 	}
-	data := make([]UserResponeDTO, len(userDAO), cap(userDAO))
+	data = make([]UserResponeDTO, len(userDAO), cap(userDAO))
 	for i := range userDAO {
 		MapUsertoUserResponeDTO(userDAO[i], &data[i])
 	}
@@ -90,7 +96,8 @@ func GetUsers(p *model.Paging, repos UserRepos, ctx context.Context) ([]UserResp
 	return data, nil
 }
 
-func VerifyPassword(data UserDTO, repos UserRepos, ctx context.Context) (UserDTO, error) {
+func VerifyPassword(data UserDTO, repos UserRepos, ctx context.Context) (user UserDTO, err error) {
+	defer logger.Trace(ctx, "UserService.VerifyPassword", data)(&user, &err)
 	userDao := model.User{}
 	if err := repos.GetUserByName(data.Name, &userDao, ctx); err != nil {
 		return UserDTO{}, err

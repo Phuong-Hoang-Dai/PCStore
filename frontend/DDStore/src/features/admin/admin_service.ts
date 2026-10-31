@@ -1,11 +1,10 @@
 import type { Order, OrderDetail } from "../order/order_model";
 import type { AdminProduct, Category, ProductInput, Stock } from "./admin_model";
-
-const url = import.meta.env.VITE_API_URL
+import { apiFetch } from "../../utils/api";
 
 // Calls the gateway with the session cookie and throws the gateway's error message.
 const request = async <T>(path: string, init: RequestInit = {}): Promise<T> => {
-  const res = await fetch(url + path, {
+  const res = await apiFetch(path, {
     ...init,
     headers: init.body ? { 'Content-Type': 'application/json' } : undefined,
     credentials: "include",

@@ -1,6 +1,5 @@
 import type { User, UserLogin } from "./user_model";
-
-const url = import.meta.env.VITE_API_URL + "/user"
+import { apiFetch } from "../../utils/api";
 
 const emptyUser: User = {
   id: 0,
@@ -14,7 +13,7 @@ export class SignUpError extends Error {}
 
 export const SignUp = async (user: UserLogin) => {
   try{
-    const res = await fetch(url, {
+    const res = await apiFetch("/user", {
       method: "POST",
       headers: {
         'Content-Type': 'application/json',
@@ -41,7 +40,7 @@ export const SignUp = async (user: UserLogin) => {
 
 export const SignIn = async (user: UserLogin) => {
   try{
-    const res = await fetch(url + "/login", {
+    const res = await apiFetch("/user/login", {
       method: "POST",
       headers: {
         'Content-Type': 'application/json',
@@ -62,7 +61,7 @@ export const SignIn = async (user: UserLogin) => {
 
 export const Logout = async () => {
  try{
-    const res = await fetch(url + "/logout", {
+    const res = await apiFetch("/user/logout", {
       method: "GET",
       headers: {
         'Content-Type': 'application/json',
@@ -80,7 +79,7 @@ export const Logout = async () => {
 // Returns the empty user (id 0) when there is no valid session cookie.
 export const TryGetUserByCookie = async ():Promise<User> => {
   try{
-    const res = await fetch(url + "/me", {
+    const res = await apiFetch("/user/me", {
       method: "GET",
       headers: {
         'Content-Type': 'application/json',

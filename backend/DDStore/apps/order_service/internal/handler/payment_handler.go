@@ -22,7 +22,7 @@ type PaymentHandler struct {
 	webhookSecret  string
 }
 
-func InitPayment(db *pgxpool.Pool, userUrl string, productUrl string) PaymentHandler {
+func InitPayment(db *pgxpool.Pool, userUrl string, productUrl string, stockCache service.StockCache) PaymentHandler {
 	stripeClient := stripe.NewClient(configs.Cfg.StripeSecretKey)
 	p := PaymentHandler{
 		paymentService: service.PaymentService{
@@ -36,6 +36,7 @@ func InitPayment(db *pgxpool.Pool, userUrl string, productUrl string) PaymentHan
 				service.StockService{Repos: repos.NewPgStockRepo(db), ProductService: productHTTPClient{baseURL: fmt.Sprint(productUrl, "/product")}},
 				service.SequencerService{Repos: repos.NewPgSequencerkRepo(db)},
 				service.PaymentService{Repo: repos.NewPgPaymentRepo(db)},
+				stockCache,
 			),
 			SuccessURL: configs.Cfg.StripeSuccessURL,
 			CancelURL:  configs.Cfg.StripeCancelURL,

@@ -5,6 +5,7 @@ import (
 	"log"
 	"strings"
 
+	"github.com/Phuong-Hoang-Dai/DDStore/app/product_service/internal/logger"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/product_service/internal/model"
 	"github.com/redis/go-redis/v9"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -21,7 +22,8 @@ func NewCateService(repos CateRepos, products ProductRepos, redis *redis.Client,
 	return cateManager{repository: repos, products: products, events: events, cache: productCache{rdb: redis}}
 }
 
-func (c cateManager) CreateCate(ctx context.Context, data model.Category) (int, error) {
+func (c cateManager) CreateCate(ctx context.Context, data model.Category) (id int, err error) {
+	defer logger.Trace(ctx, "CateService.CreateCate", data)(&id, &err)
 	data.Name = strings.TrimSpace(data.Name)
 	if data.Name == "" {
 		return 0, model.ErrCategoryIsInvalid
@@ -31,7 +33,8 @@ func (c cateManager) CreateCate(ctx context.Context, data model.Category) (int, 
 
 // UpdateCate renames the category, including the copy embedded in its products
 // and their search documents.
-func (c cateManager) UpdateCate(ctx context.Context, data model.Category) error {
+func (c cateManager) UpdateCate(ctx context.Context, data model.Category) (err error) {
+	defer logger.Trace(ctx, "CateService.UpdateCate", data)(&err)
 	data.Name = strings.TrimSpace(data.Name)
 	if data.Name == "" {
 		return model.ErrCategoryIsInvalid
@@ -62,16 +65,19 @@ func (c cateManager) UpdateCate(ctx context.Context, data model.Category) error 
 	return nil
 }
 
-func (c cateManager) GetCates(ctx context.Context) ([]model.Category, error) {
+func (c cateManager) GetCates(ctx context.Context) (cates []model.Category, err error) {
+	defer logger.Trace(ctx, "CateService.GetCates")(&cates, &err)
 	return c.repository.GetCates(ctx)
 }
 
-func (c cateManager) GetCateById(ctx context.Context, id int) (model.Category, error) {
+func (c cateManager) GetCateById(ctx context.Context, id int) (cate model.Category, err error) {
+	defer logger.Trace(ctx, "CateService.GetCateById", id)(&cate, &err)
 	return c.repository.GetCateById(ctx, id)
 }
 
 // DeleteCate refuses to delete a category that products still point to.
-func (c cateManager) DeleteCate(ctx context.Context, id int) error {
+func (c cateManager) DeleteCate(ctx context.Context, id int) (err error) {
+	defer logger.Trace(ctx, "CateService.DeleteCate", id)(&err)
 	count, err := c.products.CountProductsByCate(ctx, id)
 	if err != nil {
 		return err

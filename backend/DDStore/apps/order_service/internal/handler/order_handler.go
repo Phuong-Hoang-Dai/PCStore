@@ -18,7 +18,7 @@ type OrderHandler struct {
 	orderService service.OrderService
 }
 
-func Init(db *pgxpool.Pool, url string) OrderHandler {
+func Init(db *pgxpool.Pool, url string, stockCache service.StockCache) OrderHandler {
 	o := OrderHandler{
 		orderService: service.NewOrderService(
 			repos.NewPgOrderRepo(db),
@@ -26,6 +26,7 @@ func Init(db *pgxpool.Pool, url string) OrderHandler {
 			service.StockService{Repos: repos.NewPgStockRepo(db), ProductService: productHTTPClient{baseURL: fmt.Sprint(url, "/product")}},
 			service.SequencerService{Repos: repos.NewPgSequencerkRepo(db)},
 			service.PaymentService{Repo: repos.NewPgPaymentRepo(db)},
+			stockCache,
 		),
 	}
 

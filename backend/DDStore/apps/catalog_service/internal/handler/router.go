@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 
+	"github.com/Phuong-Hoang-Dai/DDStore/app/product_service/internal/logger"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/product_service/internal/metrics"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/product_service/internal/service"
 	"github.com/gin-contrib/cors"
@@ -12,7 +13,9 @@ import (
 func SetupHttp(productService service.ProductService, cateService service.CateService) {
 	productHandler := NewProductHandler(productService)
 	cateHandler := NewCateHandler(cateService)
-	r := gin.Default()
+	// gin.New instead of gin.Default: logger.Middleware replaces gin's text request log.
+	r := gin.New()
+	r.Use(logger.Middleware(), gin.Recovery())
 	metrics.Serve()
 	r.Use(metrics.Middleware())
 	r.Use(cors.Default())

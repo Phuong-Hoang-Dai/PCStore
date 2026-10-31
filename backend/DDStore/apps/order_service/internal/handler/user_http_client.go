@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/Phuong-Hoang-Dai/DDStore/app/order_service/internal/logger"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/order_service/internal/model"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/order_service/internal/service"
 )
@@ -55,7 +56,7 @@ func (u userHTTPClient) GetOrCreateGuest(guest service.GuestDTO, ctx context.Con
 
 // callUserService sends req and decodes the "data" field of a successful response into out.
 func callUserService(req *http.Request, out any) (status int, err error) {
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := logger.Client.Do(req)
 	if err != nil {
 		return 0, err
 	}

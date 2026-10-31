@@ -11,11 +11,13 @@ import (
 	"github.com/Phuong-Hoang-Dai/DDStore/app/product_service/configs"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/product_service/db"
 	hl "github.com/Phuong-Hoang-Dai/DDStore/app/product_service/internal/handler"
+	"github.com/Phuong-Hoang-Dai/DDStore/app/product_service/internal/logger"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/product_service/internal/repos"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/product_service/internal/service"
 )
 
 func main() {
+	logger.Setup("product_service")
 	configs.LoadConfig()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

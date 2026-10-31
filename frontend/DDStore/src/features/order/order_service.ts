@@ -1,6 +1,5 @@
 import type { Order, OrderItemRequest } from "./order_model";
-
-const url = import.meta.env.VITE_API_URL
+import { apiFetch } from "../../utils/api";
 
 const readError = async (res: Response) => {
   try {
@@ -11,15 +10,15 @@ const readError = async (res: Response) => {
   }
 }
 
-export const createOrder = async (items: OrderItemRequest[]): Promise<number> => {
-  const res = await fetch(url + "/order", {
+export const createOrder = async (items: OrderItemRequest[], transactionId?: string): Promise<number> => {
+  const res = await apiFetch("/order", {
     method: "POST",
     headers: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ data: items }),
     credentials: "include",
-  })
+  }, transactionId)
   if (!res.ok){
     throw new Error(await readError(res));
   }
@@ -37,7 +36,7 @@ export type GuestOrderRequest = {
 // Orders without logging in; returns the Stripe checkout URL. The order goes to the account
 // with this email, which is created without a password if there is none.
 export const createGuestOrder = async (order: GuestOrderRequest): Promise<string> => {
-  const res = await fetch(url + "/order/guest", {
+  const res = await apiFetch("/order/guest", {
     method: "POST",
     headers: {
       'Content-Type': 'application/json',
@@ -52,11 +51,11 @@ export const createGuestOrder = async (order: GuestOrderRequest): Promise<string
   return data["data"]["url"]
 }
 
-export const createCheckoutSession = async (orderId: number): Promise<string> => {
-  const res = await fetch(url + "/payment/checkout/" + orderId, {
+export const createCheckoutSession = async (orderId: number, transactionId?: string): Promise<string> => {
+  const res = await apiFetch("/payment/checkout/" + orderId, {
     method: "POST",
     credentials: "include",
-  })
+  }, transactionId)
   if (!res.ok){
     throw new Error(await readError(res));
   }
@@ -66,7 +65,7 @@ export const createCheckoutSession = async (orderId: number): Promise<string> =>
 }
 
 export const fetchOrderHistory = async (limit = 20, offset = 0): Promise<Order[]> => {
-  const res = await fetch(url + `/order/history?limit=${limit}&offset=${offset}`, {
+  const res = await apiFetch(`/order/history?limit=${limit}&offset=${offset}`, {
     method: "GET",
     credentials: "include",
   })

@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/Phuong-Hoang-Dai/DDStore/app/search_service/configs"
+	"github.com/Phuong-Hoang-Dai/DDStore/app/search_service/internal/logger"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/search_service/internal/metrics"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/search_service/internal/service"
 	"github.com/gin-gonic/gin"
@@ -22,7 +23,9 @@ func SetupHttp(searchService service.SearchService) *http.Server {
 		log.Printf("warning: ensure index failed: %v", err)
 	}
 
-	r := gin.Default()
+	// gin.New instead of gin.Default: logger.Middleware replaces gin's text request log.
+	r := gin.New()
+	r.Use(logger.Middleware(), gin.Recovery())
 	metrics.Serve()
 	r.Use(metrics.Middleware())
 

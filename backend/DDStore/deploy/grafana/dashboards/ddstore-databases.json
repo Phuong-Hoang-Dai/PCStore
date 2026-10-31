@@ -1,0 +1,408 @@
+{
+  "uid": "ddstore-databases",
+  "title": "DDStore Databases",
+  "description": "PostgreSQL (users, orders), MongoDB (catalog) and Redis (catalog cache), from the DB exporters. Postgres server-wide series come back from each per-database probe, hence the max by (datname).",
+  "tags": ["ddstore"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "graphTooltip": 1,
+  "time": { "from": "now-30m", "to": "now" },
+  "refresh": "10s",
+  "links": [ { "title": "DDStore", "type": "dashboards", "tags": ["ddstore"], "asDropdown": false, "keepTime": true, "includeVars": false } ],
+  "templating": { "list": [] },
+  "panels": [
+    { "type": "row", "id": 100, "title": "PostgreSQL", "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }, "panels": [] },
+    {
+      "type": "stat", "id": 1, "title": "Up",
+      "description": "Whether the exporter can connect to each database.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 1 },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [ { "type": "value", "options": { "0": { "text": "DOWN", "color": "red", "index": 0 }, "1": { "text": "UP", "color": "green", "index": 1 } } } ],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "background", "graphMode": "none", "textMode": "value_and_name", "orientation": "horizontal" },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "label_replace(pg_up, \"db\", \"$1\", \"instance\", \".*/(.*)\")", "legendFormat": "{{db}}" } ]
+    },
+    {
+      "type": "stat", "id": 2, "title": "Connections in use",
+      "description": "Server connections, over all databases, out of max_connections.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 6, "y": 1 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit", "decimals": 0,
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "orange", "value": 0.7 }, { "color": "red", "value": 0.9 } ] }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "value", "graphMode": "area", "textMode": "auto" },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(max by (datname) (pg_stat_database_numbackends)) / max(pg_settings_max_connections)" } ]
+    },
+    {
+      "type": "stat", "id": 3, "title": "Cache hit ratio",
+      "description": "Share of block reads served from shared buffers over the selected time range. No data when nothing was read.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 10, "y": 1 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit", "decimals": 1,
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "orange", "value": 0.9 }, { "color": "green", "value": 0.99 } ] }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "value", "graphMode": "none", "textMode": "auto" },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(max by (datname) (increase(pg_stat_database_blks_hit{datname=~\"ddstore_.*\"}[$__range]))) / (sum(max by (datname) (increase(pg_stat_database_blks_hit{datname=~\"ddstore_.*\"}[$__range]) + increase(pg_stat_database_blks_read{datname=~\"ddstore_.*\"}[$__range]))) > 0)", "instant": true, "range": false } ]
+    },
+    {
+      "type": "stat", "id": 4, "title": "Database size",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 6, "x": 14, "y": 1 },
+      "fieldConfig": { "defaults": { "unit": "bytes", "decimals": 1, "color": { "mode": "fixed", "fixedColor": "blue" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "value", "graphMode": "area", "textMode": "value_and_name", "orientation": "horizontal" },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "max by (datname) (pg_database_size_bytes{datname=~\"ddstore_.*\"})", "legendFormat": "{{datname}}" } ]
+    },
+    {
+      "type": "stat", "id": 5, "title": "Deadlocks",
+      "description": "Deadlocks Postgres detected and broke over the selected time range.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 1 },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 1 } ] }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "value", "graphMode": "none", "textMode": "auto" },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(max by (datname) (increase(pg_stat_database_deadlocks{datname=~\"ddstore_.*\"}[$__range])))", "instant": true, "range": false } ]
+    },
+    {
+      "type": "timeseries", "id": 6, "title": "Connections by state",
+      "description": "Many 'idle in transaction' connections usually mean a transaction that isn't committed or rolled back.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 5 },
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0, "custom": { "fillOpacity": 10, "showPoints": "never" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "max by (datname, state) (pg_stat_activity_count{datname=~\"ddstore_.*\"}) > 0", "legendFormat": "{{datname}} {{state}}" } ]
+    },
+    {
+      "type": "timeseries", "id": 7, "title": "Transactions / s",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 5 },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10, "showPoints": "never" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "max by (datname) (rate(pg_stat_database_xact_commit{datname=~\"ddstore_.*\"}[$__rate_interval]))", "legendFormat": "{{datname}} commit" },
+        { "refId": "B", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "max by (datname) (rate(pg_stat_database_xact_rollback{datname=~\"ddstore_.*\"}[$__rate_interval]))", "legendFormat": "{{datname}} rollback" }
+      ]
+    },
+    {
+      "type": "timeseries", "id": 8, "title": "Rows / s",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 5 },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10, "showPoints": "never" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "max by (datname) (rate(pg_stat_database_tup_fetched{datname=~\"ddstore_.*\"}[$__rate_interval]))", "legendFormat": "{{datname}} fetched" },
+        { "refId": "B", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "max by (datname) (rate(pg_stat_database_tup_inserted{datname=~\"ddstore_.*\"}[$__rate_interval]))", "legendFormat": "{{datname}} inserted" },
+        { "refId": "C", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "max by (datname) (rate(pg_stat_database_tup_updated{datname=~\"ddstore_.*\"}[$__rate_interval]))", "legendFormat": "{{datname}} updated" },
+        { "refId": "D", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "max by (datname) (rate(pg_stat_database_tup_deleted{datname=~\"ddstore_.*\"}[$__rate_interval]))", "legendFormat": "{{datname}} deleted" }
+      ]
+    },
+    {
+      "type": "timeseries", "id": 9, "title": "Cache hit ratio by database",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 13 },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "max": 1, "custom": { "fillOpacity": 0, "showPoints": "never" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "max by (datname) (rate(pg_stat_database_blks_hit{datname=~\"ddstore_.*\"}[$__rate_interval])) / (max by (datname) (rate(pg_stat_database_blks_hit{datname=~\"ddstore_.*\"}[$__rate_interval]) + rate(pg_stat_database_blks_read{datname=~\"ddstore_.*\"}[$__rate_interval])) > 0)", "legendFormat": "{{datname}}" } ]
+    },
+    {
+      "type": "timeseries", "id": 10, "title": "Locks by mode",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 13 },
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0, "custom": { "fillOpacity": 10, "showPoints": "never" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "max by (datname, mode) (pg_locks_count{datname=~\"ddstore_.*\"}) > 0", "legendFormat": "{{datname}} {{mode}}" } ]
+    },
+    {
+      "type": "timeseries", "id": 11, "title": "Oldest open transaction",
+      "description": "Age of the longest-running transaction. One that keeps growing holds its locks and blocks vacuum.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 13 },
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "fillOpacity": 10, "showPoints": "never" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "max by (datname) (pg_stat_activity_max_tx_duration{datname=~\"ddstore_.*\"})", "legendFormat": "{{datname}}" } ]
+    },
+    {
+      "type": "table", "id": 12, "title": "Tables",
+      "description": "Live rows are Postgres' estimate; scan counts are totals since the stats were last reset. Many dead rows mean vacuum is behind.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 21 },
+      "fieldConfig": {
+        "defaults": { "decimals": 0 },
+        "overrides": [ { "matcher": { "id": "byName", "options": "Size incl. indexes" }, "properties": [ { "id": "unit", "value": "bytes" }, { "id": "decimals", "value": 1 } ] } ]
+      },
+      "options": { "showHeader": true, "sortBy": [ { "displayName": "Live rows", "desc": true } ], "cellHeight": "sm" },
+      "transformations": [
+        { "id": "merge", "options": {} },
+        { "id": "organize", "options": {
+          "excludeByName": { "Time": true },
+          "renameByName": { "datname": "Database", "relname": "Table", "Value #A": "Live rows", "Value #B": "Dead rows", "Value #C": "Size incl. indexes", "Value #D": "Seq scans", "Value #E": "Index scans" },
+          "indexByName": { "datname": 0, "relname": 1, "Value #A": 2, "Value #B": 3, "Value #C": 4, "Value #D": 5, "Value #E": 6 }
+        } }
+      ],
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum by (datname, relname) (pg_stat_user_tables_n_live_tup)", "format": "table", "instant": true, "range": false },
+        { "refId": "B", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum by (datname, relname) (pg_stat_user_tables_n_dead_tup)", "format": "table", "instant": true, "range": false },
+        { "refId": "C", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum by (datname, relname) (pg_stat_user_tables_table_size_bytes + pg_stat_user_tables_index_size_bytes)", "format": "table", "instant": true, "range": false },
+        { "refId": "D", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum by (datname, relname) (pg_stat_user_tables_seq_scan)", "format": "table", "instant": true, "range": false },
+        { "refId": "E", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum by (datname, relname) (pg_stat_user_tables_idx_scan)", "format": "table", "instant": true, "range": false }
+      ]
+    },
+    {
+      "type": "timeseries", "id": 13, "title": "Sequential scans / s by table",
+      "description": "Full table reads. A busy, growing table here is likely missing an index.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 21 },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 0, "showPoints": "never" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "showLegend": true, "calcs": ["mean", "max"], "sortBy": "Mean", "sortDesc": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum by (datname, relname) (rate(pg_stat_user_tables_seq_scan[$__rate_interval])) > 0", "legendFormat": "{{datname}} {{relname}}" } ]
+    },
+
+    { "type": "row", "id": 101, "title": "MongoDB", "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 30 }, "panels": [] },
+    {
+      "type": "stat", "id": 20, "title": "Up",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 31 },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [ { "type": "value", "options": { "0": { "text": "DOWN", "color": "red", "index": 0 }, "1": { "text": "UP", "color": "green", "index": 1 } } } ],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "background", "graphMode": "none", "textMode": "value" },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "mongodb_up" } ]
+    },
+    {
+      "type": "stat", "id": 21, "title": "Connections",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 5, "x": 4, "y": 31 },
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0, "color": { "mode": "fixed", "fixedColor": "blue" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "value", "graphMode": "area", "textMode": "auto" },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "mongodb_connections{state=\"current\"}" } ]
+    },
+    {
+      "type": "stat", "id": 22, "title": "Data size (ddstore)",
+      "description": "Uncompressed size of the documents; storage on disk is smaller.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 5, "x": 9, "y": 31 },
+      "fieldConfig": { "defaults": { "unit": "bytes", "decimals": 1, "color": { "mode": "fixed", "fixedColor": "blue" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "value", "graphMode": "area", "textMode": "auto" },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(mongodb_dbstats_dataSize{database=\"ddstore\"})" } ]
+    },
+    {
+      "type": "stat", "id": 23, "title": "Documents (ddstore)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 5, "x": 14, "y": 31 },
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0, "color": { "mode": "fixed", "fixedColor": "blue" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "value", "graphMode": "area", "textMode": "auto" },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(mongodb_collstats_storageStats_count{database=\"ddstore\"})" } ]
+    },
+    {
+      "type": "stat", "id": 24, "title": "Resident memory",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 5, "x": 19, "y": 31 },
+      "fieldConfig": { "defaults": { "unit": "decmbytes", "decimals": 0, "color": { "mode": "fixed", "fixedColor": "blue" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "value", "graphMode": "area", "textMode": "auto" },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "mongodb_memory{type=\"resident\"}" } ]
+    },
+    {
+      "type": "timeseries", "id": 25, "title": "Operations / s by type",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 35 },
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 10, "showPoints": "never" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum by (type) (rate(mongodb_op_counters_total[$__rate_interval]))", "legendFormat": "{{type}}" } ]
+    },
+    {
+      "type": "timeseries", "id": 26, "title": "Average latency by operation type",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 35 },
+      "fieldConfig": { "defaults": { "unit": "µs", "custom": { "fillOpacity": 10, "showPoints": "never" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "rate(mongodb_mongod_op_latencies_latency_total[$__rate_interval]) / (rate(mongodb_mongod_op_latencies_ops_total[$__rate_interval]) > 0)", "legendFormat": "{{type}}" } ]
+    },
+    {
+      "type": "timeseries", "id": 27, "title": "Documents / s",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 35 },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10, "showPoints": "never" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum by (state) (rate(mongodb_mongod_metrics_document_total[$__rate_interval]))", "legendFormat": "{{state}}" } ]
+    },
+    {
+      "type": "timeseries", "id": 28, "title": "Operations / s by collection",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 43 },
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 0, "showPoints": "never" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum by (collection) (rate(mongodb_top_total_count{database=\"ddstore\"}[$__rate_interval])) > 0", "legendFormat": "{{collection}}" } ]
+    },
+    {
+      "type": "timeseries", "id": 29, "title": "Average latency by collection",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 43 },
+      "fieldConfig": { "defaults": { "unit": "µs", "custom": { "fillOpacity": 0, "showPoints": "never" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum by (collection) (rate(mongodb_top_total_time{database=\"ddstore\"}[$__rate_interval])) / (sum by (collection) (rate(mongodb_top_total_count{database=\"ddstore\"}[$__rate_interval])) > 0)", "legendFormat": "{{collection}}" } ]
+    },
+    {
+      "type": "table", "id": 30, "title": "Collections (ddstore)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 43 },
+      "fieldConfig": {
+        "defaults": { "unit": "bytes", "decimals": 1 },
+        "overrides": [ { "matcher": { "id": "byName", "options": "Documents" }, "properties": [ { "id": "unit", "value": "short" }, { "id": "decimals", "value": 0 } ] } ]
+      },
+      "options": { "showHeader": true, "sortBy": [ { "displayName": "Documents", "desc": true } ], "cellHeight": "sm" },
+      "transformations": [
+        { "id": "merge", "options": {} },
+        { "id": "organize", "options": {
+          "excludeByName": { "Time": true },
+          "renameByName": { "collection": "Collection", "Value #A": "Documents", "Value #B": "Data size", "Value #C": "Index size" },
+          "indexByName": { "collection": 0, "Value #A": 1, "Value #B": 2, "Value #C": 3 }
+        } }
+      ],
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum by (collection) (mongodb_collstats_storageStats_count{database=\"ddstore\"})", "format": "table", "instant": true, "range": false },
+        { "refId": "B", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum by (collection) (mongodb_collstats_storageStats_size{database=\"ddstore\"})", "format": "table", "instant": true, "range": false },
+        { "refId": "C", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum by (collection) (mongodb_collstats_storageStats_totalIndexSize{database=\"ddstore\"})", "format": "table", "instant": true, "range": false }
+      ]
+    },
+
+    { "type": "row", "id": 102, "title": "Redis", "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 51 }, "panels": [] },
+    {
+      "type": "stat", "id": 40, "title": "Up",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 52 },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [ { "type": "value", "options": { "0": { "text": "DOWN", "color": "red", "index": 0 }, "1": { "text": "UP", "color": "green", "index": 1 } } } ],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "background", "graphMode": "none", "textMode": "value" },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "redis_up" } ]
+    },
+    {
+      "type": "stat", "id": 41, "title": "Memory used",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 5, "x": 4, "y": 52 },
+      "fieldConfig": { "defaults": { "unit": "bytes", "decimals": 1, "color": { "mode": "fixed", "fixedColor": "blue" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "value", "graphMode": "area", "textMode": "auto" },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "redis_memory_used_bytes" } ]
+    },
+    {
+      "type": "stat", "id": 42, "title": "Cache hit ratio",
+      "description": "Key lookups that found the key, over the selected time range. No data when there were no lookups.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 5, "x": 9, "y": 52 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit", "decimals": 1,
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "orange", "value": 0.5 }, { "color": "green", "value": 0.8 } ] }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "value", "graphMode": "none", "textMode": "auto" },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(increase(redis_keyspace_hits_total[$__range])) / (sum(increase(redis_keyspace_hits_total[$__range]) + increase(redis_keyspace_misses_total[$__range])) > 0)", "instant": true, "range": false } ]
+    },
+    {
+      "type": "stat", "id": 43, "title": "Keys",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 5, "x": 14, "y": 52 },
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0, "color": { "mode": "fixed", "fixedColor": "blue" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "value", "graphMode": "area", "textMode": "auto" },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(redis_db_keys)" } ]
+    },
+    {
+      "type": "stat", "id": 44, "title": "Clients",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 5, "x": 19, "y": 52 },
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0, "color": { "mode": "fixed", "fixedColor": "blue" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "value", "graphMode": "area", "textMode": "auto" },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "redis_connected_clients" } ]
+    },
+    {
+      "type": "timeseries", "id": 45, "title": "Commands / s by command",
+      "description": "Without the exporter's own polling commands (info, config, slowlog, ...).",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 56 },
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 10, "showPoints": "never" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum by (cmd) (rate(redis_commands_total{cmd!~\"info|ping|hello|(client|command|config|latency|slowlog)[|].*\"}[$__rate_interval])) > 0", "legendFormat": "{{cmd}}" } ]
+    },
+    {
+      "type": "timeseries", "id": 46, "title": "Key lookups / s",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 56 },
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 10, "showPoints": "never" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(rate(redis_keyspace_hits_total[$__rate_interval]))", "legendFormat": "hits" },
+        { "refId": "B", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(rate(redis_keyspace_misses_total[$__rate_interval]))", "legendFormat": "misses" }
+      ]
+    },
+    {
+      "type": "timeseries", "id": 47, "title": "Average latency by command",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 56 },
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "fillOpacity": 0, "showPoints": "never" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum by (cmd) (rate(redis_commands_duration_seconds_total{cmd!~\"info|ping|hello|(client|command|config|latency|slowlog)[|].*\"}[$__rate_interval])) / (sum by (cmd) (rate(redis_commands_total{cmd!~\"info|ping|hello|(client|command|config|latency|slowlog)[|].*\"}[$__rate_interval])) > 0)", "legendFormat": "{{cmd}}" } ]
+    },
+    {
+      "type": "timeseries", "id": 48, "title": "Memory",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 64 },
+      "fieldConfig": { "defaults": { "unit": "bytes", "custom": { "fillOpacity": 10, "showPoints": "never" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "redis_memory_used_bytes", "legendFormat": "used" },
+        { "refId": "B", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "redis_memory_used_rss_bytes", "legendFormat": "rss" }
+      ]
+    },
+    {
+      "type": "timeseries", "id": 49, "title": "Keys per database",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 64 },
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0, "custom": { "fillOpacity": 10, "showPoints": "never" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "redis_db_keys > 0", "legendFormat": "{{db}}" },
+        { "refId": "B", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "redis_db_keys_expiring > 0", "legendFormat": "{{db}} with TTL" }
+      ]
+    },
+    {
+      "type": "timeseries", "id": 50, "title": "Expired and evicted keys / s",
+      "description": "Evictions mean Redis hit its memory limit and dropped keys before their TTL.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 64 },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10, "showPoints": "never" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "rate(redis_expired_keys_total[$__rate_interval])", "legendFormat": "expired" },
+        { "refId": "B", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "rate(redis_evicted_keys_total[$__rate_interval])", "legendFormat": "evicted" }
+      ]
+    }
+  ]
+}

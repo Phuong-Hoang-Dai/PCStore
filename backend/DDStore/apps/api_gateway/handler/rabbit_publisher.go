@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/Phuong-Hoang-Dai/DDStore/api_gateway/configs"
+	"github.com/Phuong-Hoang-Dai/DDStore/api_gateway/logger"
 	rmq "github.com/rabbitmq/rabbitmq-amqp-go-client/pkg/rabbitmqamqp"
 )
 
@@ -38,19 +39,13 @@ func SetupRabbit(ctx context.Context) *rmq.AmqpConnection {
 	return conn
 }
 
-func (r RabbitPublisher) PublishProduct(message []byte) {
+// PublishProduct sends the product to catalog_service with the request's transaction id.
+func (r RabbitPublisher) PublishProduct(ctx context.Context, message []byte) {
 	if RabbitHandler.createdProductPublisher == nil || RabbitHandler.conn == nil {
 		log.Panicf("Rabbit hasn't set up yet!")
 	}
 
-	res, err := RabbitHandler.createdProductPublisher.Publish(context.Background(), rmq.NewMessage(message))
-	if err != nil {
+	if err := logger.Publish(ctx, RabbitHandler.createdProductPublisher, configs.Cfg.ProductCreatedQueue, message); err != nil {
 		log.Panicf("Failed to publish a message: %v", err)
 	}
-	switch res.Outcome.(type) {
-	case *rmq.StateAccepted:
-	default:
-		log.Panicf("Unexpected publish outcome: %v", res.Outcome)
-	}
-	log.Printf(" [x] Sent %s\n", message)
 }

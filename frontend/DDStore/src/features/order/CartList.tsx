@@ -10,6 +10,7 @@ import { AiOutlineLoading3Quarters } from "react-icons/ai";
 import { selectUser } from "../auth/userReducer";
 import { createCheckoutSession, createOrder } from "./order_service";
 import { formatVND } from "../../utils/format";
+import { newTransactionId } from "../../utils/api";
 
 const CartList = ({ onClose }: { onClose?: () => void }) => {
   const cartItem = useSelector(selectCart);
@@ -35,13 +36,16 @@ const CartList = ({ onClose }: { onClose?: () => void }) => {
 
     setIsPending(true);
     setError("");
+    // One transaction id for the whole checkout, so both requests are logged under it.
+    const transactionId = newTransactionId();
     createOrder(
       cartItem.order.map((item) => ({
         productId: item.id,
         quantity: item.quantityOrder,
-      }))
+      })),
+      transactionId
     )
-      .then((orderId) => createCheckoutSession(orderId))
+      .then((orderId) => createCheckoutSession(orderId, transactionId))
       .then((url) => {
         // The cart is cleared on the success page, so it survives a cancelled payment.
         window.location.assign(url);

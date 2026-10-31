@@ -1,0 +1,44 @@
+# Ships the JSON logs the Go services write to stdout (the logger package in each service) to
+# Elasticsearch, one index per day. Browse them in Kibana: Discover > "DDStore logs".
+filebeat.autodiscover:
+    providers:
+        - type: docker
+          templates:
+              # Only the Go services: the other containers don't log JSON. Labels are nested
+              # objects here, so com.docker.compose.service is a path, not one dotted key.
+              - condition:
+                    regexp:
+                        docker.container.labels.com.docker.compose.service: "^(api_gateway|user_service|product_service|order_service|search_service)$"
+                config:
+                    - type: filestream
+                      id: container-${data.docker.container.id}
+                      paths:
+                          - /var/lib/docker/containers/${data.docker.container.id}/*.log
+                      parsers:
+                          - container: ~
+
+processors:
+    # Each line is one JSON record: its fields go to the top level, and its "message" replaces
+    # the raw line. A line that isn't JSON (a Go panic trace) is kept as it is.
+    - decode_json_fields:
+          fields: ["message"]
+          target: ""
+          overwrite_keys: true
+    # The record's own time; @timestamp (when Docker read the line) is used instead.
+    - drop_fields:
+          fields: ["time"]
+          ignore_missing: true
+
+output.elasticsearch:
+    hosts: ["http://elasticsearch:9200"]
+    index: "ddstore-logs-%{+yyyy.MM.dd}"
+
+# The log fields get their types from index-template.json instead of Filebeat's ECS template.
+setup.ilm.enabled: false
+setup.template.name: ddstore-logs
+setup.template.pattern: "ddstore-logs-*"
+setup.template.overwrite: true
+setup.template.json.enabled: true
+setup.template.json.path: /usr/share/filebeat/index-template.json
+setup.template.json.name: ddstore-logs
+setup.template.json.data_stream: false

@@ -4,13 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/Phuong-Hoang-Dai/DDStore/app/model/catalog"
+	"github.com/Phuong-Hoang-Dai/DDStore/app/order_service/internal/logger"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/order_service/internal/model"
 	"github.com/stripe/stripe-go/v87"
 )
@@ -26,6 +26,7 @@ type PaymentService struct {
 }
 
 func (p PaymentService) CreatePaymentInfo(orderId int, userId int, ctx context.Context) (status int, err error) {
+	defer logger.Trace(ctx, "PaymentService.CreatePaymentInfo", orderId, userId)(&status, &err)
 	state := model.IsCreated
 	id, err := p.Repo.CreateOrderPayment(model.OrderPayment{
 		OrderId: orderId,
@@ -40,6 +41,7 @@ func (p PaymentService) CreatePaymentInfo(orderId int, userId int, ctx context.C
 // service returns the account using the guest's email, creating one without a password if
 // needed. Checkout happens right away because a guest has no session to pay with later.
 func (p PaymentService) GuestCheckout(guest GuestDTO, items []OrderDTO, ctx context.Context) (orderId int, url string, err error) {
+	defer logger.Trace(ctx, "PaymentService.GuestCheckout", guest, items)(&orderId, &url, &err)
 	if strings.TrimSpace(guest.Name) == "" || strings.TrimSpace(guest.Email) == "" {
 		return 0, "", model.ErrInvalidGuest
 	}
@@ -56,11 +58,6 @@ func (p PaymentService) GuestCheckout(guest GuestDTO, items []OrderDTO, ctx cont
 
 	url, err = p.CreateCheckoutSession(orderId, ctx)
 	if err != nil {
-		// The guest can't retry checkout for this order, so release its stock now instead of
-		// leaving it reserved until the unpaid-order sweep.
-		if cancelErr := p.OrderService.CancelOrder(orderId, ctx); cancelErr != nil {
-			log.Printf("cancel guest order %d after failed checkout: %v", orderId, cancelErr)
-		}
 		return 0, "", err
 	}
 
@@ -68,6 +65,7 @@ func (p PaymentService) GuestCheckout(guest GuestDTO, items []OrderDTO, ctx cont
 }
 
 func (p PaymentService) CreateCheckoutSession(orderId int, ctx context.Context) (url string, err error) {
+	defer logger.Trace(ctx, "PaymentService.CreateCheckoutSession", orderId)(&url, &err)
 	paymentOrder, err := p.Repo.GetOrderPayment(orderId, ctx)
 	if err != nil {
 		return "", err
@@ -178,7 +176,8 @@ func (p PaymentService) CreateCheckoutSession(orderId int, ctx context.Context) 
 // in a snapshot event, which carries the checkout session itself.
 // Card payments finish with checkout.session.completed; delayed methods (bank transfer, ...)
 // complete later with async_payment_succeeded / async_payment_failed.
-func (p PaymentService) HandleWebhookEvent(event stripe.Event, ctx context.Context) error {
+func (p PaymentService) HandleWebhookEvent(event stripe.Event, ctx context.Context) (err error) {
+	defer logger.Trace(ctx, "PaymentService.HandleWebhookEvent", event.ID, event.Type)(&err)
 	switch event.Type {
 	case stripe.EventTypeCheckoutSessionCompleted,
 		stripe.EventTypeCheckoutSessionAsyncPaymentSucceeded,
@@ -197,7 +196,8 @@ func (p PaymentService) HandleWebhookEvent(event stripe.Event, ctx context.Conte
 
 // HandleEventNotification does the same for a thin event, which only references the checkout
 // session, so the session is fetched from Stripe.
-func (p PaymentService) HandleEventNotification(notif stripe.EventNotificationContainer, ctx context.Context) error {
+func (p PaymentService) HandleEventNotification(notif stripe.EventNotificationContainer, ctx context.Context) (err error) {
+	defer logger.Trace(ctx, "PaymentService.HandleEventNotification", notif.GetEventNotification().ID)(&err)
 	var source interface {
 		FetchRelatedObject(ctx context.Context) (*stripe.CheckoutSession, error)
 	}

@@ -12,11 +12,13 @@ import (
 	"github.com/Phuong-Hoang-Dai/DDStore/app/search_service/configs"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/search_service/db"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/search_service/internal/handler"
+	"github.com/Phuong-Hoang-Dai/DDStore/app/search_service/internal/logger"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/search_service/internal/repos"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/search_service/internal/service"
 )
 
 func main() {
+	logger.Setup("search_service")
 	configs.LoadConfig()
 
 	esClient, err := db.SetupES()

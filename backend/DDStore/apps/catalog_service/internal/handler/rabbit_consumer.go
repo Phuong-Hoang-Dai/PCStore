@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"log/slog"
 	"sync"
 
 	"github.com/Azure/go-amqp"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/product_service/configs"
+	"github.com/Phuong-Hoang-Dai/DDStore/app/product_service/internal/logger"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/product_service/internal/model"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/product_service/internal/service"
 	rmq "github.com/rabbitmq/rabbitmq-amqp-go-client/pkg/rabbitmqamqp"
@@ -48,6 +50,8 @@ func (p RabbitConsumerModel) ProductCreatedWorker(deliveries chan rmq.IDeliveryC
 	for delivery := range deliveries {
 		var data model.Product
 
+		// msgCtx carries the transaction id of the gateway request that published the message.
+		msgCtx, done := logger.Received(ctx, configs.Cfg.ProductCreatedQueue, delivery)
 		msg := delivery.Message()
 		var body []byte
 		if len(msg.Data) > 0 {
@@ -57,13 +61,15 @@ func (p RabbitConsumerModel) ProductCreatedWorker(deliveries chan rmq.IDeliveryC
 		// continue, not return: returning would stop this worker for good.
 		if err := json.Unmarshal(body, &data); err != nil {
 			delivery.Discard(context.Background(), &amqp.Error{Condition: amqp.ErrCondDecodeError})
+			done("discarded", err)
 			continue
 		}
 
-		id, err := p.productService.CreateProduct(ctx, data)
+		id, err := p.productService.CreateProduct(msgCtx, data)
 
 		if err != nil {
 			delivery.Discard(ctx, &amqp.Error{Condition: amqp.ErrCondInternalError})
+			done("discarded", err)
 			continue
 		}
 
@@ -71,7 +77,8 @@ func (p RabbitConsumerModel) ProductCreatedWorker(deliveries chan rmq.IDeliveryC
 		if err := delivery.Accept(ctx); err != nil {
 			log.Printf("Failed to accept message: %v", err)
 		}
-		log.Printf("Created successfully: id = %s", id)
+		done("accepted", nil)
+		slog.InfoContext(msgCtx, "product created", "product_id", id.Hex())
 	}
 }
 

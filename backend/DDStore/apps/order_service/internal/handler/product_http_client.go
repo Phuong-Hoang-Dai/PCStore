@@ -10,18 +10,25 @@ import (
 	"net/http"
 
 	"github.com/Phuong-Hoang-Dai/DDStore/app/model/catalog"
+	"github.com/Phuong-Hoang-Dai/DDStore/app/order_service/internal/logger"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/order_service/internal/service"
 )
 
+// productHTTPClient calls catalog_service; logger.Client forwards the transaction id of ctx.
 type productHTTPClient struct {
 	baseURL string
 }
 
-func (p productHTTPClient) GetPriceProduct(items *[]service.OrderDTO) error {
+func (p productHTTPClient) GetPriceProduct(items *[]service.OrderDTO, ctx context.Context) error {
 	url := fmt.Sprintf("%s/getprices", p.baseURL)
 
 	jsonData, _ := json.Marshal(items)
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := logger.Client.Do(req)
 	if err != nil {
 		return err
 	}
@@ -70,7 +77,7 @@ func (p productHTTPClient) GetProductsByIds(ids []string, ctx context.Context) (
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := logger.Client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +121,7 @@ func (p productHTTPClient) UpdateProductState(productId string, state catalog.Pr
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := logger.Client.Do(req)
 	if err != nil {
 		return err
 	}

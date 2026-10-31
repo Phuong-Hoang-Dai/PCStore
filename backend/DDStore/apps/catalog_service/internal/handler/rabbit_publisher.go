@@ -3,10 +3,10 @@ package handler
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 
 	"github.com/Phuong-Hoang-Dai/DDStore/app/product_service/configs"
+	"github.com/Phuong-Hoang-Dai/DDStore/app/product_service/internal/logger"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/product_service/internal/model"
 	rmq "github.com/rabbitmq/rabbitmq-amqp-go-client/pkg/rabbitmqamqp"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -54,15 +54,5 @@ func (r *RabbitPublisher) publish(ctx context.Context, event ProductIndexEvent) 
 		return err
 	}
 
-	res, err := r.publisher.Publish(ctx, rmq.NewMessage(message))
-	if err != nil {
-		return err
-	}
-	switch res.Outcome.(type) {
-	case *rmq.StateAccepted:
-	default:
-		return fmt.Errorf("unexpected publish outcome: %v", res.Outcome)
-	}
-	log.Printf(" [x] Sent %s %s", event.Action, event.Id)
-	return nil
+	return logger.Publish(ctx, r.publisher, configs.Cfg.ProductIndexQueue, message)
 }

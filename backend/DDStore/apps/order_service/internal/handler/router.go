@@ -4,24 +4,30 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/Phuong-Hoang-Dai/DDStore/app/order_service/internal/logger"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/order_service/internal/metrics"
 	"github.com/Phuong-Hoang-Dai/DDStore/app/order_service/internal/model"
+	"github.com/Phuong-Hoang-Dai/DDStore/app/order_service/internal/repos"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 )
 
-func SetupHttp(db *pgxpool.Pool) {
+func SetupHttp(db *pgxpool.Pool, rdb *redis.Client) {
 	productBaseUrl := "http://product_service:8888"
 	userBaseUrl := "http://user_service:6666"
+	stockCache := repos.NewRedisStockCache(rdb)
 
-	orderHandler := Init(db, productBaseUrl)
-	paymentHandler := InitPayment(db, userBaseUrl, productBaseUrl)
+	orderHandler := Init(db, productBaseUrl, stockCache)
+	paymentHandler := InitPayment(db, userBaseUrl, productBaseUrl, stockCache)
 	stockHandler := InitStock(db, productBaseUrl)
 
 	// Cancels orders left unpaid for model.OrderPaymentTimeout and releases their stock.
 	go orderHandler.orderService.RunExpiredOrderCanceller(context.Background(), model.ExpiredOrderSweepInterval)
 
-	r := gin.Default()
+	// gin.New instead of gin.Default: logger.Middleware replaces gin's text request log.
+	r := gin.New()
+	r.Use(logger.Middleware(), gin.Recovery())
 	metrics.Serve()
 	r.Use(metrics.Middleware())
 
