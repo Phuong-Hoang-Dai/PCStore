@@ -12,3 +12,6 @@ export type User = {
   name:string
   roleId: string
 }
+
+// Roles the gateway lets into admin routes.
+export const isAdminRole = (role: string) => role === "admin" || role === "owner"

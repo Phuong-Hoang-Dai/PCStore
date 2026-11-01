@@ -1,0 +1,13 @@
+{
+    "Servers": {
+        "1": {
+            "Name": "DDStore",
+            "Group": "Servers",
+            "Host": "postgres",
+            "Port": 5432,
+            "MaintenanceDB": "ddstore_users",
+            "Username": "ddstore",
+            "SSLMode": "disable"
+        }
+    }
+}

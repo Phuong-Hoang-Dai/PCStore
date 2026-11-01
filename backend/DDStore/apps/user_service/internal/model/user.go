@@ -5,23 +5,22 @@ import (
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
 )
 
 type User struct {
-	Id             int            `json:"id" gorm:"column:id"`
-	Name           string         `json:"name" gorm:"column:name"`
-	Email          string         `json:"email" gorm:"column:email"`
-	HashedPassword []byte         `gorm:"column:password"`
-	Role           string         `json:"role" gorm:"column:role"`
-	CreatedAt      time.Time      `json:"create_at"`
-	UpdatedAt      time.Time      `json:"update_at"`
-	DeletedAt      gorm.DeletedAt `json:"delete_at" gorm:"index"`
+	Id             int       `json:"id"`
+	Name           string    `json:"name"`
+	Email          string    `json:"email"`
+	HashedPassword []byte    `json:"-"`
+	Role           string    `json:"role"`
+	CreatedAt      time.Time `json:"create_at"`
+	UpdatedAt      time.Time `json:"update_at"`
+	DeletedAt      time.Time `json:"delete_at"`
 }
 
 type DeleteUser struct {
-	Id        int       `json:"id" gorm:"column:id"`
-	Delete_at time.Time `json:"delete_at" gorm:"column:delete_at"`
+	Id        int       `json:"id"`
+	Delete_at time.Time `json:"delete_at"`
 }
 
 func (User) GetTableName() string { return "users" }

@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+    - name: ddstore
+      folder: DDStore
+      type: file
+      # UI edits can be saved, but a later change to the JSON file replaces them; to keep a
+      # change, export the dashboard JSON into deploy/grafana/dashboards.
+      allowUiUpdates: true
+      options:
+          path: /etc/grafana/dashboards

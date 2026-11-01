@@ -1,0 +1,60 @@
+# Scraped over the compose network. The services serve /metrics on :2112 (not published to
+# the host); search_service only runs with --profile search and shows as down otherwise.
+global:
+    scrape_interval: 15s
+    evaluation_interval: 15s
+
+scrape_configs:
+    - job_name: services
+      static_configs:
+          - targets: ["api_gateway:2112"]
+            labels: { service: api_gateway }
+          - targets: ["user_service:2112"]
+            labels: { service: user_service }
+          - targets: ["product_service:2112"]
+            labels: { service: product_service }
+          - targets: ["order_service:2112"]
+            labels: { service: order_service }
+          - targets: ["search_service:2112"]
+            labels: { service: search_service }
+
+    # Built-in rabbitmq_prometheus plugin: publish/deliver rates, connections, ...
+    - job_name: rabbitmq
+      static_configs:
+          - targets: ["rabbitmq:15692"]
+
+    # Per-queue depth and consumers (the default endpoint only has totals over all queues).
+    - job_name: rabbitmq-queues
+      metrics_path: /metrics/detailed
+      params:
+          family: [queue_coarse_metrics, queue_consumer_count]
+      static_configs:
+          - targets: ["rabbitmq:15692"]
+
+    # postgres_exporter in multi-target mode: one probe per database, so the per-table stats
+    # cover both. Cluster-wide series (pg_stat_database, ...) come back from each probe.
+    - job_name: postgres
+      metrics_path: /probe
+      params:
+          auth_module: [ddstore]
+      static_configs:
+          - targets: ["postgres:5432/ddstore_users", "postgres:5432/ddstore_orders"]
+      relabel_configs:
+          - source_labels: [__address__]
+            target_label: __param_target
+          - source_labels: [__param_target]
+            target_label: instance
+          - target_label: __address__
+            replacement: postgres_exporter:9187
+
+    - job_name: mongodb
+      static_configs:
+          - targets: ["mongodb_exporter:9216"]
+
+    - job_name: redis
+      static_configs:
+          - targets: ["redis_exporter:9121"]
+
+    - job_name: prometheus
+      static_configs:
+          - targets: ["localhost:9090"]

@@ -1,0 +1,10 @@
+# Credentials for the "postgres" job in deploy/prometheus/prometheus.yml, which probes each
+# database through /probe?auth_module=ddstore&target=postgres:5432/<database>.
+auth_modules:
+    ddstore:
+        type: userpass
+        userpass:
+            username: ddstore
+            password: ddstore
+        options:
+            sslmode: disable

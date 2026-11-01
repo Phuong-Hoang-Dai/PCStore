@@ -1,15 +1,22 @@
 package handler
 
 import (
-	"gorm.io/gorm"
+	"net/http"
 
+	"github.com/Phuong-Hoang-Dai/DDStore/app/user_service/internal/logger"
+	"github.com/Phuong-Hoang-Dai/DDStore/app/user_service/internal/metrics"
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func SetupHttp(db *gorm.DB) {
+func SetupHttp(db *pgxpool.Pool) {
 	userService := Init(db)
 
-	r := gin.Default()
+	// gin.New instead of gin.Default: logger.Middleware replaces gin's text request log.
+	r := gin.New()
+	r.Use(logger.Middleware(), gin.Recovery())
+	metrics.Serve()
+	r.Use(metrics.Middleware())
 
 	user := r.Group("/user")
 	{
@@ -19,6 +26,11 @@ func SetupHttp(db *gorm.DB) {
 		user.GET("", userService.GetUsers())
 		user.DELETE("/:id", userService.DeleteUser())
 		user.POST("/verifyPassword", userService.VerifyPassword())
+		user.GET("/healthcheck", func(ctx *gin.Context) {
+			ctx.JSON(http.StatusAccepted, gin.H{
+				"message": "user service is healthy",
+			})
+		})
 	}
 
 	r.Run(":6666")

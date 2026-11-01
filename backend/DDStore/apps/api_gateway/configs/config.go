@@ -11,6 +11,8 @@ type Config struct {
 	JWTSecret            string
 	AccessTokenExpireIn  string
 	RefreshTokenExpireIn string
+	BrokerURI            string
+	ProductCreatedQueue  string
 }
 
 var Cfg Config
@@ -22,5 +24,7 @@ func LoadConfig() {
 		JWTSecret:            os.Getenv("JWT_SECRET"),
 		AccessTokenExpireIn:  os.Getenv("JWT_EXPIRES_IN"),
 		RefreshTokenExpireIn: os.Getenv("JWT_RefreshToken_EXPIRES_IN"),
+		BrokerURI:            os.Getenv("BROKER_URI"),
+		ProductCreatedQueue:  os.Getenv("PRODUCT_CREATED_QUEUE"),
 	}
 }

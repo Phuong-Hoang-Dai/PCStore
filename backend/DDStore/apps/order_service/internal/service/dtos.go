@@ -3,7 +3,7 @@ package service
 import "github.com/Phuong-Hoang-Dai/DDStore/app/order_service/internal/model"
 
 type OrderDTO struct {
-	ProductId int     `json:"productId"`
+	ProductId string  `json:"productId"`
 	Quantity  int     `json:"quantity"`
 	Price     float64 `json:"price"`
 	OrderId   int     `json:"orderId"`
@@ -11,6 +11,19 @@ type OrderDTO struct {
 
 type OrderResponeDTO struct {
 	Price float64 `json:"price"`
+}
+
+// GuestDTO is who places an order without logging in.
+type GuestDTO struct {
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
+type UserDTO struct {
+	Id    int    `json:"id"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
+	Role  string `json:"roleId"`
 }
 
 func MapOrderResponeDTOtoOrderDTO(oR OrderResponeDTO, o *OrderDTO) {

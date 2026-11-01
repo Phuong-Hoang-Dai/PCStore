@@ -1,39 +1,30 @@
 package handler
 
 import (
-	"bytes"
-	"fmt"
+	"io"
 	"net/http"
-	"strconv"
 
+	Err "github.com/Phuong-Hoang-Dai/DDStore/api_gateway/constant"
 	"github.com/gin-gonic/gin"
 )
 
-func getProductsByCate(baseUrl string) func(ctx *gin.Context) {
+// publishProduct hands the new product to catalog_service through RabbitMQ.
+func publishProduct() func(ctx *gin.Context) {
 	return func(ctx *gin.Context) {
-		id, err := strconv.Atoi(ctx.Param("id"))
+		body, err := io.ReadAll(ctx.Request.Body)
 		if err != nil {
-			responeError(http.StatusBadRequest, err, ctx)
+			responeError(http.StatusBadRequest, Err.ErrCannotReadBody, ctx)
 			return
 		}
-		limit, err := strconv.Atoi(ctx.DefaultQuery("limit", "0"))
-		if err != nil {
-			responeError(http.StatusBadRequest, err, ctx)
-			return
-		}
-		offset, err := strconv.Atoi(ctx.DefaultQuery("offset", "0"))
-		if err != nil {
-			responeError(http.StatusBadRequest, err, ctx)
-			return
-		}
-		bodyData, statusCode, err := makeRequest(http.MethodGet,
-			fmt.Sprintf("%s/%d?limit=%d&offset=%d", baseUrl, id, limit, offset),
-			bytes.NewBuffer([]byte{}))
-		if err != nil {
-			responeError(statusCode, err, ctx)
-			return
-		}
+		RabbitHandler.PublishProduct(ctx, body)
 
-		ctx.JSON(statusCode, bodyData)
+		ctx.JSON(http.StatusAccepted, "")
+	}
+}
+
+// getProductsByCate forwards to catalog_service, which serves it at /product/cate/:id.
+func getProductsByCate() func(ctx *gin.Context) {
+	return func(ctx *gin.Context) {
+		forward(ctx, productService, "/product/cate/"+ctx.Param("id"), pagingQuery(ctx))
 	}
 }

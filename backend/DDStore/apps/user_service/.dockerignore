@@ -1,0 +1,3 @@
+# Local config (may hold secrets); containers get config from compose env.
+**/.env
+**/*.exe

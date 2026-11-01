@@ -1,17 +1,31 @@
 import type { User, UserLogin } from "./user_model";
+import { apiFetch } from "../../utils/api";
 
-const url = import.meta.env.VITE_API_URL + "/user"
+const emptyUser: User = {
+  id: 0,
+  name: "",
+  email: "",
+  roleId: "",
+}
 
+// Thrown by SignUp with a message that can be shown to the user.
+export class SignUpError extends Error {}
 
 export const SignUp = async (user: UserLogin) => {
   try{
-    const res = await fetch(url, {
+    const res = await apiFetch("/user", {
       method: "POST",
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(user)
     })
+    if (res.status === 409){
+      throw new SignUpError("Email này đã có tài khoản, vui lòng đăng nhập");
+    }
+    if (res.status === 400){
+      throw new SignUpError("Họ tên, email hoặc mật khẩu không hợp lệ");
+    }
     if (!res.ok){
       throw new Error("Network response was not ok");
     }
@@ -19,14 +33,14 @@ export const SignUp = async (user: UserLogin) => {
     const data = await res.json()
     return data
   }catch(error){
-    console.error("Failed to fetch products:", error);
+    console.error("Failed to sign up:", error);
     throw error;
   }
 }
 
 export const SignIn = async (user: UserLogin) => {
   try{
-    const res = await fetch(url + "/login", {
+    const res = await apiFetch("/user/login", {
       method: "POST",
       headers: {
         'Content-Type': 'application/json',
@@ -40,14 +54,14 @@ export const SignIn = async (user: UserLogin) => {
     }
     return data
   }catch(error){
-    console.error("Failed to fetch products:", error);
+    console.error("Failed to sign in:", error);
     throw error;
   }
 }
 
 export const Logout = async () => {
  try{
-    const res = await fetch(url + "/logout", {
+    const res = await apiFetch("/user/logout", {
       method: "GET",
       headers: {
         'Content-Type': 'application/json',
@@ -57,31 +71,29 @@ export const Logout = async () => {
     const data = await res.json()
     return data
   }catch(error){
-     console.error("Failed to fetch products:", error);
+     console.error("Failed to log out:", error);
     throw error;
   }
 }
 
+// Returns the empty user (id 0) when there is no valid session cookie.
 export const TryGetUserByCookie = async ():Promise<User> => {
   try{
-    const res = await fetch(url + "/me", {
+    const res = await apiFetch("/user/me", {
       method: "GET",
       headers: {
         'Content-Type': 'application/json',
       },
       credentials: `include`,
     })
+    if (!res.ok){
+      return emptyUser
+    }
     const data = await res.json()
     const user: User = data["data"]
-    if (!res.ok){
-      return {
-      id:0,
-      name:"",
-      email:""
-    }}
-    return user
+    return user ?? emptyUser
   }catch(error){
-     console.error("Failed to fetch products:", error);
-    throw error;
+     console.error("Failed to get current user:", error);
+    return emptyUser
   }
 }

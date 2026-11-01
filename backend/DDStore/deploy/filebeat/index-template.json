@@ -1,0 +1,36 @@
+{
+    "index_patterns": ["ddstore-logs-*"],
+    "priority": 200,
+    "template": {
+        "settings": {
+            "number_of_shards": 1,
+            "number_of_replicas": 0
+        },
+        "mappings": {
+            "properties": {
+                "@timestamp": { "type": "date" },
+                "message": { "type": "text" },
+                "level": { "type": "keyword" },
+                "service": { "type": "keyword" },
+                "transaction_id": { "type": "keyword" },
+                "kind": { "type": "keyword" },
+                "method": { "type": "keyword" },
+                "path": { "type": "keyword" },
+                "route": { "type": "keyword" },
+                "query": { "type": "keyword" },
+                "status": { "type": "short" },
+                "duration_ms": { "type": "float" },
+                "client_ip": { "type": "keyword" },
+                "request_body": { "type": "text" },
+                "response_body": { "type": "text" },
+                "queue": { "type": "keyword" },
+                "outcome": { "type": "keyword" },
+                "message_body": { "type": "text" },
+                "function": { "type": "keyword" },
+                "function_input": { "type": "text" },
+                "function_output": { "type": "text" },
+                "error": { "type": "text" }
+            }
+        }
+    }
+}

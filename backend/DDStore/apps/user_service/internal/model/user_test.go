@@ -1,22 +1,25 @@
 package model_test
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/Phuong-Hoang-Dai/DDStore/app/user_service/internal/model"
-	"golang.org/x/crypto/bcrypt"
 )
 
 func TestUser(t *testing.T) {
 	var user model.User
-	Password := []byte("Test12345**")
-	user.SetHashPassword(Password)
-	err := bcrypt.CompareHashAndPassword(user.HashedPassword, Password)
+	password := []byte("Test12345**")
+	user.SetHashPassword(password)
 
-	fmt.Printf("%v \n", err != nil)
-	t.Run("Test Process", func(t *testing.T) {
+	t.Run("correct password verifies", func(t *testing.T) {
+		if err := user.VerifyPassword(password); err != nil {
+			t.Errorf("VerifyPassword: %v", err)
+		}
+	})
 
-		t.Errorf("HashPassword: %v", user.HashedPassword)
+	t.Run("wrong password is rejected", func(t *testing.T) {
+		if err := user.VerifyPassword([]byte("wrong")); err == nil {
+			t.Error("VerifyPassword accepted a wrong password")
+		}
 	})
 }
